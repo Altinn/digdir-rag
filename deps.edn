@@ -1,0 +1,41 @@
+{:deps    {io.replikativ/datahike {:mvn/version "0.6.1588"}
+           io.replikativ/datahike-jdbc {:mvn/version "0.3.48"}
+           org.postgresql/postgresql {:mvn/version "42.7.3"}
+           net.clojars.wkok/openai-clojure {:mvn/version "0.18.1"}
+           nano-id/nano-id {:mvn/version "1.0.0"}
+           io.github.nextjournal/markdown {:mvn/version "0.5.144"}
+           hiccup/hiccup {:mvn/version "2.0.0-RC1"}
+           markdown-clj/markdown-clj {:mvn/version "1.12.1"}
+           clj-http/clj-http {:mvn/version "3.12.3"}
+           io.github.runeanielsen/typesense-clj {:mvn/version "0.1.143"}
+           dev.weavejester/medley {:mvn/version "1.8.0"}
+           cheshire/cheshire {:mvn/version "5.13.0"}
+           ;; Electric Dependencies
+         ;;   com.hyperfiddle/electric {:local/root "../vendors/electric"}
+           com.hyperfiddle/electric       {:git/url "https://github.com/hyperfiddle/electric" :git/sha "b32ac98df7d7ec87f225d47354671be172ffa87e"}
+           ring/ring                      {:mvn/version "1.11.0"} ; comes with Jetty
+           org.clojure/clojure            {:mvn/version "1.12.0-alpha5"}
+           org.clojure/clojurescript      {:mvn/version "1.11.121"}
+           org.clojure/tools.logging      {:mvn/version "1.2.4"}
+           ch.qos.logback/logback-classic {:mvn/version "1.4.14"}}
+ :paths   ["src" "resources"]
+ :aliases {:dev
+           {:extra-paths ["src-dev"]
+            :extra-deps  {djblue/portal {:mvn/version "0.57.1"}
+                          thheller/shadow-cljs          {:mvn/version "2.26.2"}
+                          io.github.clojure/tools.build {:mvn/version "0.9.6"
+                                                         :exclusions  [com.google.guava/guava  ; Guava version conflict between tools.build and clojurescript.
+                                                                       org.slf4j/slf4j-nop]}}} ; clashes with app logger
+           :cider-clj {:extra-deps {cider/cider-nrepl {:mvn/version "0.50.2"}}
+                       :main-opts ["-m" "nrepl.cmdline" "--middleware" "[cider.nrepl/cider-middleware]"]}
+           :prod
+           {:extra-paths ["src-prod"]}
+
+           :build ; use `clj -X:build build-client`, NOT -T! build/app classpath contamination cannot be prevented
+           {:extra-paths ["src-build"]
+            :ns-default  build
+            :extra-deps  {thheller/shadow-cljs          {:mvn/version "2.26.2"}
+                          io.github.clojure/tools.build {:mvn/version "0.9.6"
+                                                         :exclusions  [com.google.guava/guava   ; Guava version conflict between tools.build and clojurescript.
+                                                                       org.slf4j/slf4j-nop]}}} ; clashes with app logger
+           }}

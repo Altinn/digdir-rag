@@ -1,0 +1,19 @@
+{:all-entities-image "bot.svg"
+ :entities [#_{:id "ec8c8be0-587d-4269-804a-78ce493801b5"
+             :name "Altinn assistent"
+             :image "altinn-assistant-logo.png"
+             :docs-collection "DEV_studio-docs_2024-18-09"
+             :chunks-collection "DEV_studio-chunks_2024-18-09"
+             :phrases-collection "DEV_studio-phrases_2024-18-09"
+             :phrase-gen-prompt "keyword-search"
+             :reasoning-languages ["en"]
+             :prompt ""}
+            {:id "71e1adbe-2116-478d-92b8-40b10a612d7b"
+             :name "Kunnskapsassistent - staging"
+             :image "kudos-logo.png"
+             :docs-collection "staging_kudos_docs"
+             :chunks-collection "staging_kudos_chunks"
+             :phrases-collection "staging_kudos_phrases"
+             :phrase-gen-prompt "keyword-search"
+             :reasoning-languages ["en" "no"]
+             :prompt ""}]}

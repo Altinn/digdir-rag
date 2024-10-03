@@ -1,0 +1,131 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body {
+        height: 100%;
+}
+
+::-webkit-scrollbar-track {
+  background-color: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #ccc;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: #aaa;
+}
+
+::-webkit-scrollbar-track:hover {
+  background-color: #f2f2f2;
+}
+
+::-webkit-scrollbar-corner {
+  background-color: transparent;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+/* 
+html {
+  background: #202123;
+} */
+
+@media (max-width: 720px) {
+  pre {
+    /* width: calc(100vw - 110px); */
+  }
+}
+
+pre:has(div.codeblock) {
+  padding: 0;
+}
+pre:has(code) {
+  padding-top: 0.6rem;
+  /* padding-bottom: 0.0rem; */
+  background-color: lightgray;
+  font-size: 0.8em;
+  line-height: 130%;
+  overflow-x: scroll;
+}
+
+/* markdown styles */
+ol {
+  padding-top: 8px;
+  padding-bottom: 10px;
+}
+
+ul {
+  padding-left: 4px;
+  padding-top: 0.6rem;
+  padding-bottom: 0rem;
+}
+
+div ul {
+  padding-top: 0.6rem;
+}
+
+
+ol ul {
+  padding-top: 0.2rem;
+}
+
+li {
+  padding-top: 0.3rem;
+  padding-bottom: 0px;
+  /* list-style-type: disc; */
+  
+}
+
+ol li {
+  padding-top: 0.7rem;
+}
+
+ol ul li {
+  list-style-type: disc;
+  position: relative;
+  margin-left: 1rem;
+  margin-top: 0.1rem;
+}
+
+li ul li {
+  padding-top: 0.1rem;
+}
+/* end markdown styles */
+
+.anchored-scroller * {
+  overflow-anchor: none;
+}
+
+div.scroller-anchor {
+  overflow-anchor: auto;
+  min-height: 1px;
+}
+
+a {
+  color: blue;
+}
+
+.animate-spin {
+  animation: spin 3s linear;
+  opacity: 1;
+  transition: opacity 0.3s ease-out;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin:not(:active) {
+  opacity: 0;
+}
