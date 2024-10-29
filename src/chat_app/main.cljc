@@ -7,6 +7,7 @@
             #?(:clj [nextjournal.markdown :as md])
             #?(:clj [nextjournal.markdown.transform :as md.transform])
             #?(:clj [hiccup2.core :as h])
+            [clojure.edn :as edn]
             [markdown.core :as md2]
             [clojure.string :as str]
             [clojure.string :as str]
@@ -14,16 +15,23 @@
             [hyperfiddle.electric-dom2 :as dom]
             [nano-id.core :refer [nano-id]]
             [hyperfiddle.electric-ui4 :as ui]
+            [tick.core :as t]
+            ;; [tick.locale-en-us]
             #?(:clj [wkok.openai-clojure.api :as openai])
 
-            #?(:clj [models.db :refer [delayed-connection]])
+            #?(:clj [chat-app.auth :as auth])
+            [chat-app.webauthn :as webauthn]
+
+            #?(:clj [models.db :as db :refer [delayed-connection]])
             #?(:clj [chat-app.rag :as rag])))
 
 ;; Can possibly remove the snapshot usage in next version of Electric
 ;; https://clojurians.slack.com/archives/C7Q9GSHFV/p1693947757659229?thread_ts=1693946525.050339&cid=C7Q9GSHFV
 
-(e/def entities-cfg (e/server (read-string (slurp "config.edn"))))
+(e/def config-filename (e/server (System/getenv "ENTITY_CONFIG_FILE")))
+(e/def entities-cfg (e/server (read-string (slurp config-filename))))
 (e/def dh-conn) ; injected database ref; Electric defs are always dynamic
+(e/def auth-conn)
 
 #?(:cljs (defonce !view-main (atom :entity-selection)))
 #?(:cljs (defonce !conversation-entity (atom nil))) ;; now holds the entire entity config, not just the name
@@ -95,21 +103,25 @@
 
 #?(:cljs (defn mobile-device? []
            (or (or ua/IPHONE
-                 ua/PLATFORM_KNOWN_ ua/ASSUME_IPHONE
-                 (platform/isIphone))
-             (or ua/ANDROID
-               ua/PLATFORM_KNOWN_ ua/ASSUME_ANDROID
-               (platform/isAndroid)))))
+                   ua/PLATFORM_KNOWN_ ua/ASSUME_IPHONE
+                   (platform/isIphone))
+               (or ua/ANDROID
+                   ua/PLATFORM_KNOWN_ ua/ASSUME_ANDROID
+                   (platform/isAndroid)))))
 
 #?(:clj (defn lowercase-includes? [s1 s2]
           (and (string? s1) (string? s2)
-            (clojure.string/includes? (clojure.string/lower-case s1) (clojure.string/lower-case s2)))))
+               (clojure.string/includes? (clojure.string/lower-case s1) (clojure.string/lower-case s2)))))
 
 #?(:clj (defn parse-text [s]
           (->> (md/parse s)
-            md.transform/->hiccup
-            h/html
-            str)))
+               md.transform/->hiccup
+               h/html
+               str)))
+
+#?(:cljs (defn pretty-print [data]
+           (with-out-str (cljs.pprint/pprint data))))
+
 
 ;; #?(:clj
 ;;    (defn fetch-convo-messages
@@ -206,13 +218,13 @@
                 (swap! !stream-msgs assoc-in [convo-id :streaming] false)
                 (let [tx-msg (:content (get @!stream-msgs convo-id))]
                   (d/transact conn [{:conversation/id convo-id
-                                         :conversation/messages [{:message/id (nano-id)
-                                                                  :message/text tx-msg
-                                                                  :message/role :assistant
-                                                                  :message/voice :assistant
-                                                                  :message/kind :kind/markdown
-                                                                  :message/completion true
-                                                                  :message/created (System/currentTimeMillis)}]}]))
+                                     :conversation/messages [{:message/id (nano-id)
+                                                              :message/text tx-msg
+                                                              :message/role :assistant
+                                                              :message/voice :assistant
+                                                              :message/kind :kind/markdown
+                                                              :message/completion true
+                                                              :message/created (System/currentTimeMillis)}]}]))
                 (swap! !stream-msgs assoc-in [convo-id :content] nil))))))
 
 #?(:clj
@@ -325,7 +337,7 @@
                           :message/kind :kind/markdown
                           :message/created time-point}]
            tx-result (d/transact conn [{:conversation/id convo-id
-                                         :conversation/messages new-messages}]) 
+                                        :conversation/messages new-messages}])
            _ (prn "stored followup query in db, fetching completion-messages")
            messages (vec (fetch-convo-messages-mapped @conn convo-id))
            ;; we send all completion-messages to the llm
@@ -333,7 +345,7 @@
            completion-messages (filter #(not= false (:message/completion %)) (concat messages new-messages))
            _ (prn "fetched" (count completion-messages) "completion-messages")
 
-      ;;_ (prn "*** agent-messages: ***" agent-messages)
+           ;;_ (prn "*** agent-messages: ***" agent-messages)
            _ (prn "Starting LLM call for followup query.")
            _ (swap! rag/!response-states conj "Starting LLM call for followup query")
            openai-messages (into []
@@ -341,13 +353,23 @@
                                          {:role (name (:message/role msg))
                                           :content (:message/text msg)})
                                        completion-messages))
-           _ (prn "openai-messages:" openai-messages)
-           chat-response (openai/create-chat-completion
-                          {:model (System/getenv "OPENAI_API_MODEL_NAME")
-                           :messages openai-messages
-                           :temperature 0.1
-                           :stream false
-                           :max_tokens nil})
+           ;;  _ (prn "openai-messages:" openai-messages)
+           chat-response
+           (if rag/use-azure-openai
+             (openai/create-chat-completion
+              {:model (rag/env-var "AZURE_OPENAI_DEPLOYMENT_NAME")
+               :messages openai-messages
+               :temperature 0.1
+               :max_tokens nil}
+              {:api-key (rag/env-var "AZURE_OPENAI_API_KEY")
+               :api-endpoint (rag/env-var "AZURE_OPENAI_ENDPOINT")
+               :impl :azure})
+             (openai/create-chat-completion
+              {:model (System/getenv "OPENAI_API_MODEL_NAME")
+               :messages openai-messages
+               :temperature 0.1
+               :stream false
+               :max_tokens nil}))
            _ (prn "chat-response completed. response:" chat-response)
            _ (reset! rag/!response-states [])
            assistant-reply (:content (:message (first (:choices chat-response))))
@@ -364,23 +386,23 @@
 #?(:clj (defn stream-chat-completion [convo-id msg-list model api-key]
           (swap! !stream-msgs assoc-in [convo-id :streaming] true)
           (try (openai/create-chat-completion
-                 {:model model
-                  :messages msg-list
-                  :stream true
-                  :on-next #(process-chunk convo-id %)}
-                 {:api-key api-key})
-            (catch Exception e
-              (println "This is the exception: " e)))))
+                {:model model
+                 :messages msg-list
+                 :stream true
+                 :on-next #(process-chunk convo-id %)}
+                {:api-key api-key})
+               (catch Exception e
+                 (println "This is the exception: " e)))))
 
 (e/defn PromptInput [{:keys [convo-id messages selected-model temperature]}]
   (e/client
   ;; TODO: add the system prompt to the message list
-    (let [api-key (e/server (e/offload #(d/q '[:find ?v .
-                                               :where
-                                               [?e :active-key-name ?name]
-                                               [?k :key/name ?name]
-                                               [?k :key/value ?v]] dh-conn)))
-          !input-node (atom nil)]
+   (let [api-key (e/server (e/offload #(d/q '[:find ?v .
+                                              :where
+                                              [?e :active-key-name ?name]
+                                              [?k :key/name ?name]
+                                              [?k :key/value ?v]] dh-conn)))
+         !input-node (atom nil)]
 
       (dom/div (dom/props {:class (str (if (mobile-device?) "bottom-8" "bottom-0") " absolute left-0 w-full border-transparent bg-gradient-to-b from-transparent via-white to-white pt-6 dark:border-white/20 dark:via-[#343541] dark:to-[#343541] md:pt-2")})
         (dom/div (dom/props {:class "stretch mx-2 mt-4 flex flex-row gap-3 last:mb-2 md:mx-4 md:mt-[52px] md:last:mb-6 lg:mx-auto md:max-w-[90%] lg:max-w-xl"})
@@ -398,38 +420,38 @@
                                         (when-not (str/blank? v)
                                           (if-not @!active-conversation
                                             ;; New conversation
-                                            (let [convo-id (nano-id)
-                                                  _ (prn "new convo-id:" convo-id)
-                                                  _ (prn "user query:" v)]
-                                              (e/server (reset! rag/!response-states []))
-                                              (reset! !active-conversation convo-id)
-                                              (reset! !view-main :conversation)
-                                              (e/server
-                                                (let [v-str v] ; TODO: figure out why this needs to be done. Seems to be breaking without it.
-                                                  (e/offload #(answer-new-user-query-with-rag conversation-entity convo-id v-str)))
+                                                                                   (let [convo-id (nano-id)
+                                                                                         _ (prn "new convo-id:" convo-id)
+                                                                                         _ (prn "user query:" v)]
+                                                                                     (e/server (reset! rag/!response-states []))
+                                                                                     (reset! !active-conversation convo-id)
+                                                                                     (reset! !view-main :conversation)
+                                                                                     (e/server
+                                                                                      (let [v-str v] ; TODO: figure out why this needs to be done. Seems to be breaking without it.
+                                                                                        (e/offload #(answer-new-user-query-with-rag conversation-entity convo-id v-str)))
                                                 ;;
-                                                nil))
+                                                                                      nil))
 
                                             ;; Add messages to an existing conversation 
-                                            (let [convo-id @!active-conversation]
-                                              (e/server
-                                                (let [v-str v]
-                                                  (when convo-id
-                                                    (e/offload #(answer-followup-user-query convo-id v-str))))
-                                                nil)))))
-                                      (set! (.-value @!input-node) "")))))
-              (ui/button (e/fn [] (set! (.-value @!input-node) ""))
-                (dom/props {:class "absolute right-2 top-2 rounded-sm p-1 text-neutral-800 opacity-60 hover:bg-neutral-200 hover:text-neutral-900 dark:bg-opacity-50 dark:text-neutral-100 dark:hover:text-neutral-200"})
-                (set! (.-innerHTML dom/node) send-icon)))))))))
+                                                                                   (let [convo-id @!active-conversation]
+                                                                                     (e/server
+                                                                                      (let [v-str v]
+                                                                                        (when convo-id
+                                                                                          (e/offload #(answer-followup-user-query convo-id v-str))))
+                                                                                      nil)))))
+                                                                             (set! (.-value @!input-node) "")))))
+                                         (ui/button (e/fn [] (set! (.-value @!input-node) ""))
+                                                    (dom/props {:class "absolute right-2 top-2 rounded-sm p-1 text-neutral-800 opacity-60 hover:bg-neutral-200 hover:text-neutral-900 dark:bg-opacity-50 dark:text-neutral-100 dark:hover:text-neutral-200"})
+                                                    (set! (.-innerHTML dom/node) send-icon)))))))))
 
 #?(:cljs (defn copy-to-clipboard [text]
            (if (and (exists? js/navigator.clipboard)
-                 (exists? js/navigator.clipboard.writeText))
+                    (exists? js/navigator.clipboard.writeText))
              (let [promise (.writeText (.-clipboard js/navigator) text)]
                (if (exists? (.-then promise))
                  (.then promise
-                   (fn [] (js/console.log "Text copied to clipboard!"))
-                   (fn [err] (js/console.error "Failed to copy text to clipboard:" err)))
+                        (fn [] (js/console.log "Text copied to clipboard!"))
+                        (fn [err] (js/console.error "Failed to copy text to clipboard:" err)))
                  (js/console.error "writeText did not return a Promise")))
              (js/console.error "Clipboard API not supported in this browser"))))
 
@@ -543,13 +565,13 @@
           ;; _ (prn "non-agent-messages count:" (count non-agent-messages) "messages")
           ]
 
-      (dom/div 
-        (dom/props {:class "flex flex-col stretch justify-center items-center h-full lg:max-w-3xl mx-auto gap-4"})
-        #_(dom/props {:class "anchored-scroller flex flex-col items-start w-full lg:max-w-3xl gap-4 mb-20"})
-        (dom/div (dom/props {:class "flex flex-col gap-8 items-center"})
-          #_(dom/img (dom/props {:class "w-10 mx-auto rounded-full"
-                                 :src image}))
-          (dom/h1 (dom/props {:class "text-2xl"}) (dom/text (or full-name name)))
+     (dom/div
+      (dom/props {:class "flex flex-col stretch justify-center items-center h-full lg:max-w-3xl mx-auto gap-4"})
+      #_(dom/props {:class "anchored-scroller flex flex-col items-start w-full lg:max-w-3xl gap-4 mb-20"})
+      (dom/div (dom/props {:class "flex flex-col gap-8 items-center"})
+               #_(dom/img (dom/props {:class "w-10 mx-auto rounded-full"
+                                      :src image}))
+               (dom/h1 (dom/props {:class "text-2xl"}) (dom/text (or full-name name)))
           ;; Uncomment to check prompt
           #_(dom/p (dom/text (e/server (slurp (clojure.java.io/resource prompt))))))
         (when messages ;todo: check if this is still needed
@@ -757,70 +779,156 @@
               (when (and (seq conversations) open-folder?)
                 (ConversationList. conversations)))))))))
 
+(defonce !prepared-opts (atom nil))
+
+(e/defn HandleRegistration []
+  (e/client 
+   (println "this is a test")
+   (let [create-opts (e/server
+                      (let [current-user (:user-id (auth/verify-token (get-in e/http-request [:cookies "auth-token" :value])))
+                            session-id (get-in e/http-request [:headers "sec-websocket-key"])]
+                        (webauthn/create-public-key-options
+                         session-id
+                         {:name current-user
+                          :display-name current-user
+                          :rp-name "company-name"
+                          :rp-id "localhost"})))
+         cb #(reset! webauthn/!created-key %) 
+         prepared-opts (webauthn/prepare-for-creation create-opts)]
+     (reset! !prepared-opts create-opts)
+     (webauthn/create-credential prepared-opts cb)
+     nil)))
+
+
+
+#_(e/defn SessionTimer []
+  (e/client
+   (let [jwt-expiry (e/server (:expiry (auth/verify-token (get-in e/http-request [:cookies "auth-token" :value]))))
+         positive-duration? (fn [d] (t/< (t/new-duration 0 :seconds) d))
+         !t-between (atom (t/between (t/now) (t/instant jwt-expiry))) t-between (e/watch !t-between)
+         !interval-running (atom nil) interval-running (e/watch !interval-running)
+         _ (when-not interval-running
+             (println "Setting interval")
+             (reset! !interval-running
+                     (js/setInterval #(reset! !t-between
+                                              (t/between (t/now) (t/instant jwt-expiry))) 1000)))
+         time-dist [(t/hours t-between)
+                    (t/minutes t-between)
+                    (t/seconds t-between)]
+         [hours minutes seconds] time-dist
+         message (cond
+                   (<= 1 hours) (str hours " hour and " (mod minutes 60) " minutes")
+                   (<= 5 minutes) (str minutes " minutes")
+                   (< 0 minutes) (str minutes " minutes " (mod seconds 60) " seconds")
+                   :else (str seconds " seconds"))]
+     
+     ;; When session expires cancel the websocket session
+     (when-not (positive-duration? t-between)
+       (set! (.-href js/window.location) "/login"))
+     
+     ;; Handle when a new passkey is generated 
+     (dom/p (dom/text "Created key: " (str (e/watch webauthn/!created-key))))
+     (dom/p (dom/text "Session challenges: " (e/server (e/watch webauthn/!session-challenges))))
+     (when-let [created-key (e/watch webauthn/!created-key)]
+       (let [data (webauthn/serialize-public-key-credential created-key)]
+         (e/server
+          (let [conn @delayed-connection
+                session-id (get-in e/http-request [:headers "sec-websocket-key"])
+                success-cb (fn [username passkey]
+                             (let [passkey-str (pr-str (-> passkey
+                                                           (update-in [:public-key -2] webauthn/byte-array-to-base64)
+                                                           (update-in [:public-key -3] webauthn/byte-array-to-base64)))]
+                               (println "This is the username: " username)
+                               (println "this is the auth-data: " (get-in passkey [:public-key -2]))
+                               (println "this is the auth-data: " (webauthn/byte-array-to-base64 (get-in passkey [:public-key -2])))
+                               (println "round trip: " (webauthn/base64-to-byte-array (webauthn/byte-array-to-base64 (get-in passkey [:public-key -2]))))
+                               (println "cose map: " (update-in passkey [:public-key -2] webauthn/byte-array-to-base64))
+                               (d/transact conn [{:db/id [:user/email username]
+                                                  :user/key-created (str (t/now))
+                                                  :user/key passkey-str}])))]
+            (println "This is the session-id: " session-id)
+            (e/offload #(webauthn/handle-new-user-creds session-id data success-cb)))
+          nil)))
+     
+     ;; View for session time and creating a passkey
+     (dom/div (dom/props {:class "p-4 border rounded flex flex-col gap-4 bg-red-100"})
+              (dom/div
+               (dom/p (dom/text "Session:"))
+               (dom/p (dom/props {:class "font-bold"})
+                      (dom/text message)))
+              (dom/div
+               (dom/p (dom/props {:class "text-xs mb-1 font-light"})
+                      (dom/text "Complete registration"))
+               (dom/button
+                (dom/props {:class "px-4 py-2 rounded bg-black text-white hover:bg-slate-800"})
+                (dom/on "click" (e/fn [e] (HandleRegistration.)))
+                (dom/text "Create passkey")))))))
+
+
 (e/defn LeftSidebar []
   (e/client
-    (when sidebar?
-      (let [folders (e/server  (e/offload #(sort-by first > (d/q '[:find ?created ?e ?folder-id ?name
-                                                                   :where
-                                                                   [?e :folder/id ?folder-id]
-                                                                   [?e :folder/name ?name]
-                                                                   [?e :folder/created ?created]]
-                                                              dh-conn))))
-            !search-text (atom nil)
-            search-text (e/watch !search-text)
-            conversations  (if-not search-text
-                             (e/server
-                               (e/offload #(sort-by first > (d/q '[:find ?created ?e ?conv-id ?topic
+   (when sidebar?
+     (let [folders (e/server  (e/offload #(sort-by first > (d/q '[:find ?created ?e ?folder-id ?name
+                                                                  :where
+                                                                  [?e :folder/id ?folder-id]
+                                                                  [?e :folder/name ?name]
+                                                                  [?e :folder/created ?created]]
+                                                                dh-conn))))
+           !search-text (atom nil)
+           search-text (e/watch !search-text)
+           conversations  (if-not search-text
+                            (e/server
+                             (e/offload #(sort-by first > (d/q '[:find ?created ?e ?conv-id ?topic
+                                                                 :where
+                                                                 [?e :conversation/id ?conv-id]
+                                                                 [?e :conversation/topic ?topic]
+                                                                 [?e :conversation/created ?created]
+                                                                 (not [?e :conversation/folder])]
+                                                               dh-conn))))
+
+                            (e/server
+                             (e/offload #(let [convo-eids (d/q '[:find [?c ...]
+                                                                 :in $ search-txt ?includes-fn
+                                                                 :where
+                                                                 [?m :message/text ?msg-text]
+                                                                 [?c :conversation/messages ?m]
+                                                                 [?c :conversation/topic ?topic]
+                                                                 (or-join [?msg-text ?topic]
+                                                                          [(?includes-fn ?msg-text search-txt)]
+                                                                          [(?includes-fn ?topic search-txt)])]
+                                                               dh-conn search-text lowercase-includes?)]
+                                           (sort-by first > (d/q '[:find ?created ?e ?conv-id ?topic
+                                                                   :in $ [?e ...]
                                                                    :where
                                                                    [?e :conversation/id ?conv-id]
                                                                    [?e :conversation/topic ?topic]
-                                                                   [?e :conversation/created ?created]
-                                                                   (not [?e :conversation/folder])]
-                                                              dh-conn))))
-
-                             (e/server
-                               (e/offload #(let [convo-eids (d/q '[:find [?c ...]
-                                                                   :in $ search-txt ?includes-fn
-                                                                   :where
-                                                                   [?m :message/text ?msg-text]
-                                                                   [?c :conversation/messages ?m]
-                                                                   [?c :conversation/topic ?topic]
-                                                                   (or-join [?msg-text ?topic]
-                                                                     [(?includes-fn ?msg-text search-txt)]
-                                                                     [(?includes-fn ?topic search-txt)])]
-                                                              dh-conn search-text lowercase-includes?)]
-                                             (sort-by first > (d/q '[:find ?created ?e ?conv-id ?topic
-                                                                     :in $ [?e ...]
-                                                                     :where
-                                                                     [?e :conversation/id ?conv-id]
-                                                                     [?e :conversation/topic ?topic]
-                                                                     [?e :conversation/created ?created]]
-                                                                dh-conn convo-eids))))))
-            !clear-conversations? (atom false)
-            clear-conversations? (e/watch !clear-conversations?)]
-        (dom/div (dom/props {:class (str "bg-slate-100 pt-8 px-4 w-[260px] h-full flex flex-col gap-4"
+                                                                   [?e :conversation/created ?created]]
+                                                                 dh-conn convo-eids))))))
+           !clear-conversations? (atom false)
+           clear-conversations? (e/watch !clear-conversations?)]
+       (dom/div (dom/props {:class (str "bg-slate-100 pt-8 px-4 w-[260px] h-full flex flex-col gap-4"
                                           ;; Old css
-                                      #_"fixed top-0 left-0 z-40 flex h-full w-[260px] flex-none flex-col space-y-2 p-2 text-[14px] transition-all sm:relative sm:top-0")}) ;bg-[#202123]
+                                        #_"fixed top-0 left-0 z-40 flex h-full w-[260px] flex-none flex-col space-y-2 p-2 text-[14px] transition-all sm:relative sm:top-0")}) ;bg-[#202123]
 
-          (dom/div (dom/props {:class "flex flex-col"})
-            (let [local-btn-style "flex items-center gap-4 py-2 px-4 w-full rounded hover:bg-slate-300"]
-              (ui/button
-                (e/fn []
-                  (reset! !active-conversation nil)
-                  (reset! !view-main :entity-selection))
-                (dom/props {:class local-btn-style})
-                (let [entity (first (:entities entities-cfg))]
-                  (dom/img (dom/props {:class "w-8 rounded-full"
-                                       :src (:image entity)}))
-                  (dom/p (dom/text (:name entity)))))
-              (ui/button
-                (e/fn []
-                  (reset! !view-main :entity-selection)
-                  (reset! !active-conversation nil))
-                (dom/props {:class local-btn-style})
-                (dom/img (dom/props {:class "w-8 rounded-full"
-                                     :src (:all-entities-image entities-cfg)}))
-                (dom/p (dom/text "All Entities")))))
+                (dom/div (dom/props {:class "flex flex-col"})
+                         (let [local-btn-style "flex items-center gap-4 py-2 px-4 w-full rounded hover:bg-slate-300"]
+                           (ui/button
+                            (e/fn []
+                              (reset! !active-conversation nil)
+                              (reset! !view-main :entity-selection))
+                            (dom/props {:class local-btn-style})
+                            (let [entity (first (:entities entities-cfg))]
+                              (dom/img (dom/props {:class "w-8 rounded-full"
+                                                   :src (:image entity)}))
+                              (dom/p (dom/text (:name entity)))))
+                           (ui/button
+                            (e/fn []
+                              (reset! !view-main :entity-selection)
+                              (reset! !active-conversation nil))
+                            (dom/props {:class local-btn-style})
+                            (dom/img (dom/props {:class "w-8 rounded-full"
+                                                 :src (:all-entities-image entities-cfg)}))
+                            (dom/p (dom/text "All Entities")))))
 
           (dom/div (dom/props {:class "relative flex items-center gap-4 pt-4"})
             (dom/input (dom/props {:class "w-full flex-1 rounded-md border border-neutral-600 px-4 py-3 pr-10 text-[14px] leading-3" ;bg-[#202123]
@@ -845,148 +953,284 @@
                               (dom/text (str (count  conversations)) #_(map second conversations) " results found")))
 
                  ;; Conversations 
-          (dom/div (dom/props {:class "flex-grow overflow-auto flex flex-col"})
-            (if (or (seq conversations) (seq folders))
-              (do
-                (FolderList. folders)
-                (ConversationList. conversations))
-              (dom/div
-                (dom/div (dom/props {:class "mt-8 select-none text-center opacity-50"})
-                  (set! (.-innerHTML dom/node) no-data-icon)
-                  (dom/text "No Data")))))
-          (dom/div (dom/props {:class "flex flex-col items-center space-y-1 border-t border-white/20 pt-1 text-sm"})
-            (if-not clear-conversations?
-              (ui/button
-                (e/fn []
-                  (println "clear conversations")
-                  (reset! !clear-conversations? true))
-                (dom/props {:class "flex w-full cursor-pointer select-none items-center gap-3 rounded-md py-3 px-3 text-[14px] leading-3 transition-colors duration-200 hover:bg-gray-500/10"})
-                (dom/text "Clear conversations"))
-              (dom/div (dom/props {:class "flex w-full cursor-pointer select-none items-center gap-3 rounded-md py-3 px-3 text-[14px] leading-3 transition-colors duration-200 hover:bg-gray-500/10"})
-                (set! (.-innerHTML dom/node) delete-icon)
-                (dom/text "Are you sure?")
-                (dom/div (dom/props {:class "absolute right-1 z-10 flex text-gray-300"})
-                  (ui/button (e/fn []
-                               (println "clearing all conversations")
-                               (e/server
-                                (let [conn @delayed-connection]
-                                  (println "serverside call")
-                                  (e/offload
-                                   #(let [convo-eids (map :e (d/datoms @conn :avet :conversation/id))
-                                          folder-eids (map :e (d/datoms @conn :avet :folder/id))
-                                          m-eids  (set (map first (d/q '[:find ?m
-                                                                         :in $ [?convo-id ...]
-                                                                         :where
-                                                                         [?convo-id :conversation/messages ?m]] dh-conn convo-eids)))
-                                          retraction-ops (concat
-                                                          (mapv (fn [eid] [:db.fn/retractEntity eid :conversation/id]) convo-eids)
-                                                          (mapv (fn [eid] [:db.fn/retractEntity eid :folder/id]) m-eids)
-                                                          (mapv (fn [eid] [:db.fn/retractEntity eid :folder/id]) folder-eids))]
-                                      (d/transact conn retraction-ops))))
-                                 nil)
-                               (reset! !active-conversation nil)
-                               (reset! !clear-conversations? false))
-                    (dom/props {:class "min-w-[20px] p-1 text-neutral-400 hover:text-neutral-100"})
-                    (set! (.-innerHTML dom/node) tick-icon))
+                (dom/div (dom/props {:class "flex-grow overflow-auto flex flex-col"})
+                         (if (or (seq conversations) (seq folders))
+                           (do
+                             (FolderList. folders)
+                             (ConversationList. conversations))
+                           (dom/div
+                            (dom/div (dom/props {:class "mt-8 select-none text-center opacity-50"})
+                                     (set! (.-innerHTML dom/node) no-data-icon)
+                                     (dom/text "No Data")))))
 
-                  (ui/button (e/fn [] (reset! !clear-conversations? false))
-                    (dom/props {:class "min-w-[20px] p-1 text-neutral-400 hover:text-neutral-100"})
-                    (set! (.-innerHTML dom/node) x-icon)))))
-            #_(ui/button (e/fn []
-                           (reset! !view-main :settings)
-                           (when (mobile-device?) (reset! !sidebar? false)))
-                (dom/props {:class "flex w-full cursor-pointer select-none items-center gap-3 rounded-md py-3 px-3 text-[14px] leading-3 text-white transition-colors duration-200 hover:bg-gray-500/10"})
-                (set! (.-innerHTML dom/node) settings-icon)
-                (dom/text "Settings"))))))))
+                (let [http-cookie-jwt (e/server (get-in e/http-request [:cookies "auth-token" :value]))]
+                  #_(dom/p (dom/text "created-by: " (e/server (let [user-email (:user-id (auth/verify-token (get-in e/http-request [:cookies "auth-token" :value])))]
+                                                                (e/offload #(:user/id (d/pull auth-conn '[:user/id] [:user/email user-email])))))))
+                  #_(dom/p (dom/text "HTTP Only cookie: " http-cookie-jwt))
+                  (let [cookie (e/server (auth/verify-token http-cookie-jwt))
+                        jwt-expiry (:expiry cookie)
+                        user-id (:user-id cookie)
+                        is-admin-user (e/server (auth/admin-user? user-id))]
+                    ;;  
+                    (when is-admin-user
+                      #_(SessionTimer.)
+                      (dom/button
+                       (dom/props {:class "px-4 py-2 rounded bg-black text-white hover:bg-slate-800"})
+                       (dom/on "click" (e/fn [e] (reset! !view-main :dashboard)))
+                       (dom/text "Admin Dashboard"))
+                      (dom/div (dom/props {:class "flex flex-col items-center space-y-1 border-t border-white/20 pt-1 text-sm"})
+                               (if-not clear-conversations?
+                                 (ui/button
+                                  (e/fn []
+                                    (println "clear conversations")
+                                    (reset! !clear-conversations? true))
+                                  (dom/props {:class "flex w-full cursor-pointer select-none items-center gap-3 rounded-md py-3 px-3 text-[14px] leading-3 transition-colors duration-200 hover:bg-gray-500/10"})
+                                  (dom/text "Clear conversations"))
+                                 (dom/div (dom/props {:class "flex w-full cursor-pointer select-none items-center gap-3 rounded-md py-3 px-3 text-[14px] leading-3 transition-colors duration-200 hover:bg-gray-500/10"})
+                                          (set! (.-innerHTML dom/node) delete-icon)
+                                          (dom/text "Are you sure?")
+                                          (dom/div (dom/props {:class "absolute right-1 z-10 flex text-gray-300"})
+                                                   (ui/button (e/fn []
+                                                                (println "clearing all conversations")
+                                                                (e/server
+                                (let [conn @delayed-connection]
+                                                                  (println "serverside call")
+                                                                  (e/offload
+                                                                  #(let [convo-eids (map :e (d/datoms @conn :avet :conversation/id))
+                                                                         folder-eids (map :e (d/datoms @conn :avet :folder/id))
+                                                                         m-eids  (set (map first (d/q '[:find ?m
+                                                                                                        :in $ [?convo-id ...]
+                                                                                                        :where
+                                                                                                        [?convo-id :conversation/messages ?m]] dh-conn convo-eids)))
+                                                                         retraction-ops (concat
+                                                                                        (mapv (fn [eid] [:db.fn/retractEntity eid :conversation/id]) convo-eids)
+                                                                                        (mapv (fn [eid] [:db.fn/retractEntity eid :folder/id]) m-eids)
+                                                                                        (mapv (fn [eid] [:db.fn/retractEntity eid :folder/id]) folder-eids))]
+                                                                     (d/transact conn retraction-ops))))
+                                                                 nil)
+                                                                (reset! !active-conversation nil)
+                                                                (reset! !clear-conversations? false))
+                                                              (dom/props {:class "min-w-[20px] p-1 text-neutral-400 hover:text-neutral-100"})
+                                                              (set! (.-innerHTML dom/node) tick-icon))
+
+                                                   (ui/button (e/fn [] (reset! !clear-conversations? false))
+                                                              (dom/props {:class "min-w-[20px] p-1 text-neutral-400 hover:text-neutral-100"})
+                                                              (set! (.-innerHTML dom/node) x-icon)))))
+                               #_(ui/button (e/fn []
+                                              (reset! !view-main :settings)
+                                              (when (mobile-device?) (reset! !sidebar? false)))
+                                            (dom/props {:class "flex w-full cursor-pointer select-none items-center gap-3 rounded-md py-3 px-3 text-[14px] leading-3 text-white transition-colors duration-200 hover:bg-gray-500/10"})
+                                            (set! (.-innerHTML dom/node) settings-icon)
+                                            (dom/text "Settings")))))))))))
 
 (e/defn TreeView [db-data]
   (e/client
-    (dom/div (dom/props {:class "p-4 h-full overflow-auto"})
-      (let [!expanded-views (atom #{})
-            expanded-views (e/watch !expanded-views)]
-        (e/for-by identity [[k v] db-data]
-          (let [expanded? (contains? expanded-views k)]
-            (dom/div (dom/props {:class "cursor-pointer"})
-              (dom/on "click" (e/fn [_]
-                                (if-not expanded?
-                                  (swap! !expanded-views conj k)
-                                  (swap! !expanded-views disj k))))
-              (dom/div (dom/props {:class "flex px-2 -mx-2 font-bold rounded"})
-                (dom/p (dom/props {:class "w-4"})
-                  (dom/text (if expanded? "▼" "▶")))
-                (dom/p (dom/text k "  (count " (count (filter #(not (= :db/txInstant (:a %))) v)) ")")))
-              (when expanded?
-                (dom/div (dom/props {:class "pl-4"})
-                  (e/for-by identity [[k v] (group-by :e v)]
-                    (e/for-by identity [{:keys [e a v t asserted]} (filter #(not (= :db/txInstant (:a %))) v)]
+   (dom/div (dom/props {:class "p-4 h-full overflow-auto"})
+            (let [!expanded-views (atom #{})
+                  expanded-views (e/watch !expanded-views)]
+              (e/for-by identity [[k v] db-data]
+                        (let [expanded? (contains? expanded-views k)]
+                          (dom/div (dom/props {:class "cursor-pointer"})
+                                   (dom/on "click" (e/fn [_]
+                                                     (if-not expanded?
+                                                       (swap! !expanded-views conj k)
+                                                       (swap! !expanded-views disj k))))
+                                   (dom/div (dom/props {:class "flex px-2 -mx-2 font-bold rounded"})
+                                            (dom/p (dom/props {:class "w-4"})
+                                                   (dom/text (if expanded? "▼" "▶")))
+                                            (dom/p (dom/text k "  (count " (count (filter #(not (= :db/txInstant (:a %))) v)) ")")))
+                                   (when expanded?
+                                     (dom/div (dom/props {:class "pl-4"})
+                                              (e/for-by identity [[k v] (group-by :e v)]
+                                                        (e/for-by identity [{:keys [e a v t asserted]} (filter #(not (= :db/txInstant (:a %))) v)]
                       ;; (let [{:keys [e a v t]} v])
-                      (dom/div (dom/props {:class "flex gap-4"})
-                        (dom/p (dom/props {:class "w-4"})
-                          (dom/text e))
-                        (dom/p (dom/props {:class "w-1/3"})
-                          (dom/text a))
-                        (dom/p (dom/props {:class "w-1/3"})
-                          (dom/text (if (string? v)
-                                      (subs v 0 (min 300 (count v)))
-                                      v)))
-                        (dom/p (dom/props {:class "w-8"})
-                          (dom/text asserted))))))))))))))
+                                                                  (dom/div (dom/props {:class "flex gap-4"})
+                                                                           (dom/p (dom/props {:class "w-4"})
+                                                                                  (dom/text e))
+                                                                           (dom/p (dom/props {:class "w-1/3"})
+                                                                                  (dom/text a))
+                                                                           (dom/p (dom/props {:class "w-1/3"})
+                                                                                  (dom/text (if (string? v)
+                                                                                              (subs v 0 (min 300 (count v)))
+                                                                                              v)))
+                                                                           (dom/p (dom/props {:class "w-8"})
+                                                                                  (dom/text asserted))))))))))))))
 
 (e/defn DBInspector []
   (e/server
-    (let [group-by-tx (fn [results] (reduce (fn [acc [e a v tx asserted]]
-                                              (update acc tx conj {:e e :a a :v v :asserted asserted}))
-                                      {}
-                                      results))
-          db-data (let [results (d/q '[:find ?e ?a ?v ?tx ?asserted
-                                       :where
-                                       [?e ?a ?v ?tx ?asserted]] dh-conn)]
-                    (reverse (sort (group-by-tx results))))]
-      (e/client
-        (dom/div (dom/props {:class "absolute top-0 right-0 h-48 w-1/2 z-20 bg-red-500 overflow-auto"})
-          (TreeView. db-data))))))
+   (let [!selected-db (atom :chat) selected-db (e/watch !selected-db)
+         group-by-tx (fn [results] (reduce (fn [acc [e a v tx asserted]]
+                                             (update acc tx conj {:e e :a a :v v :asserted asserted}))
+                                           {}
+                                           results))
+         db (case selected-db
+              :chat dh-conn
+              :auth auth-conn)
+         db-data (let [results (d/q '[:find ?e ?a ?v ?tx ?asserted
+                                      :where
+                                      [?e ?a ?v ?tx ?asserted]] db #_#_auth-conn dh-conn)]
+                   (reverse (sort (group-by-tx results))))]
+     (e/client
+      (dom/div (dom/props {:class "absolute top-0 right-0 h-48 w-1/2 bg-red-500 overflow-auto"})
+               (dom/p (dom/text "Selected db: "  selected-db))
+               (dom/ul
+                (dom/props {:class "flex gap-4 p-2"})
+                (e/for-by identity [db-name [:chat :auth]]
+                          (dom/button
+                           (dom/props {:class "px-4 py-2 bg-black text-white rounded hover:"})
+                           (dom/on "click" (e/fn [e] (e/server (reset! !selected-db db-name) nil)))
+                           (dom/text db-name))))
+               (TreeView. db-data))))))
 
 (e/defn EntitySelector []
   (e/client
-    (let [EntityCard (e/fn [id title img-src]
-                       (ui/button (e/fn []
-                                    (let [entity (some #(when (= (:id %) id) %) (:entities entities-cfg))]
-                                      (when entity
-                                        (reset! !view-main :conversation)
-                                        (reset! !conversation-entity entity))))
-                         (dom/props {:class "flex flex-col gap-4 items-center hover:scale-110 hover:shadow-lg shadow rounded p-4 transition-all ease-in duration-150 bg-slate-200"}) ;bg-[#202123]
-                         (dom/img (dom/props {:class "w-48 mx-auto rounded"
-                                              :src img-src}))
-                         (dom/p (dom/props {:class "text-bold text-lg"})
-                           (dom/text title))))]
-      (dom/div (dom/props {:class "flex justify-center items-center h-full gap-8"})
-        (e/for-by identity [{:keys [id name image]} (:entities entities-cfg)]
-          (EntityCard. id name image))))))
+   (let [EntityCard (e/fn [id title img-src]
+                      (ui/button (e/fn []
+                                   (let [entity (some #(when (= (:id %) id) %) (:entities entities-cfg))]
+                                     (when entity
+                                       (reset! !view-main :conversation)
+                                       (reset! !conversation-entity entity))))
+                                 (dom/props {:class "flex flex-col gap-4 items-center hover:scale-110 hover:shadow-lg shadow rounded p-4 transition-all ease-in duration-150 bg-slate-200"}) ;bg-[#202123]
+                                 (dom/img (dom/props {:class "w-48 mx-auto rounded"
+                                                      :src img-src}))
+                                 (dom/p (dom/props {:class "text-bold text-lg"})
+                                        (dom/text title))))]
+     (dom/div (dom/props {:class "flex justify-center items-center h-full gap-8"})
+              (e/for-by identity [{:keys [id name image]} (:entities entities-cfg)]
+                        (EntityCard. id name image))))))
+
+#?(:cljs (defn get-from-local-storage [key]
+           (.getItem js/localStorage key)))
+
+
+
+(e/defn AuthAdminDashboard []
+  (e/client
+   (dom/div
+    (dom/props {:class "p-8 flex flex-col gap-4"})
+    (let [token (e/client (get-from-local-storage "auth-token"))]
+      (dom/div
+       (dom/p (dom/text "Local storage JWT: " token))
+       (dom/p (dom/text "Local storage JWT unsigned: " (e/server (auth/verify-token token))))
+       (let [http-cookie-jwt (e/server (get-in e/http-request [:cookies "auth-token" :value]))]
+         (dom/p (dom/text "created-by: " (e/server (let [user-email (:user-id (auth/verify-token (get-in e/http-request [:cookies "auth-token" :value])))]
+                                                     (e/offload #(:user/id (d/pull auth-conn '[:user/id] [:user/email user-email])))))))
+         (dom/p (dom/text "HTTP Only cookie: " http-cookie-jwt))
+         (let [cookie (e/server (auth/verify-token http-cookie-jwt))
+               jwt-expiry (:expiry cookie)]
+           (dom/p (dom/text "HTTP Only cookie: " cookie))
+           (dom/p (dom/text "HTTP Only cookie user: " (:user-id cookie)))
+           (dom/p (dom/text "HTTP Only cookie expiry: " jwt-expiry))
+           #_(dom/p (dom/text "HTTP Only cookie expiry intant: " (t/instant jwt-expiry)))
+
+           #_(let [!t-between (atom (t/between (t/now) (t/instant jwt-expiry)))
+                 t-between (e/watch !t-between)
+                 !interval-running (atom nil) interval-running (e/watch !interval-running)
+                 positive-duration? (fn [d] (t/< (t/new-duration 0 :seconds) d))
+                 _ (when-not interval-running
+                     (println "Setting interval")
+                     (reset! !interval-running
+                             (js/setInterval #(reset! !t-between
+                                                      (t/between (t/now) (t/instant jwt-expiry))) 1000)))
+                 _ (println "the running interval" interval-running)
+                 time-dist [(t/days t-between)
+                            (t/hours t-between)
+                            (t/minutes t-between)
+                            (t/seconds t-between)]
+                 [days hours minutes seconds] time-dist
+                 message (cond
+                           (< 1 days) (str days " days")
+                           (< 24 hours) (str days " day")
+                           (and (< hours 24) (< 2 hours)) (str hours " hours")
+                           (< 1 hours) (str hours " hour and " minutes " minutes")
+                           :else (str minutes " minutes " (mod seconds 60) "seconds"))]
+             (dom/p (dom/text "Positive duration: " (positive-duration? t-between)))
+             (when-not (positive-duration? t-between)
+               (set! (.-href js/window.location) "/auth"))
+             (dom/p (dom/text t-between))
+             (dom/p (dom/text message)))))))
+
+    (dom/button
+     (dom/props {:class "px-4 py-2 bg-black text-white rounded"})
+     (dom/on "click" (e/fn [e] (set! (.-href js/window.location) "/logout")))
+     (dom/text "Sign out"))
+                          ;;
+    (let [!email (atom nil) email (e/watch !email)]
+      (dom/div
+       (dom/props {:class "flex gap-4"})
+       (dom/input
+        (dom/props {:class "px-4 py-2 border rounded"
+                    :placeholder "Enter email"
+                    :value email})
+        (dom/on "keyup" (e/fn [e]
+                          (if-some [v (not-empty (.. e -target -value))]
+                            (reset! !email v)
+                            (reset! !email nil)))))
+       (dom/button (dom/props {:class "px-4 py-2 rounded bg-black hover:bg-slate-800 text-white"})
+                   (dom/on "click" (e/fn [_]
+                                       (when-let [email @!email]
+                                         (e/server
+                                          (auth/send-confirmation-code "kunnskap@digdir.cloud" (auth/generate-confirmation-code email))
+                                          nil))))
+                   (dom/text "Send Code"))
+       (dom/button
+        (dom/props {:class "px-4 py-2 rounded bg-black hover:bg-slate-800 text-white"})
+        (dom/on "click" (e/fn [_]
+                          (when-let [email @!email]
+                            (e/server 
+                             (let [current-user (:user-id (auth/verify-token (get-in e/http-request [:cookies "auth-token" :value])))
+                                   admin-id (e/offload #(:user/id (d/pull auth-conn '[:user/id] [:user/email current-user])))]
+                               (e/offload #(auth/create-new-user {:email email
+                                                                 :creator-id admin-id})) 
+                               nil)
+                             (auth/generate-confirmation-code email)
+                             nil))))
+        (dom/text "Generate Code"))))
+
+    (dom/p (dom/text "Auth db"))
+    (dom/pre (dom/text (pretty-print (e/server (e/offload #(auth/all-accounts auth-conn))) )))
+    
+
+    (dom/p (dom/text "Active Confirmation Codes"))
+    (dom/ul (dom/props {:class "flex flex-col gap-2"})
+            (e/for-by identity [user-code (e/server (map (fn [[key value]] [key (update value :expiry str)])
+                                                         (e/watch auth/confirmation-codes)))]
+
+                      (dom/li (dom/props {:class "flex"})
+                              (dom/p (dom/text user-code))
+                              (dom/button
+                               (dom/props {:class "px-2 py-1 rounded bg-black text-white"})
+                               (dom/on "click" (e/fn [_]
+                                                 (e/server
+                                                  (swap! auth/confirmation-codes dissoc (first user-code))
+                                                  nil)))
+                               (dom/text "Remove"))))))))
 
 
 (e/defn MainView []
   (e/client
-    (dom/div (dom/props {:class "flex flex-1 h-full w-full"})
-      (dom/on "drop" (e/fn [_] (println "drop ")))
-      (dom/on "dragdrop" (e/fn [_] (println "drop ")))
-      (dom/on "dragenter" (e/fn [_] (println "enter main")))
-      (dom/on "dragleave" (e/fn [_] (println "leave main")))
-      (dom/div (dom/props {:class "relative flex-1 overflow-hidden pb-[100px]"}) ;dark:bg-[#343541] bg-white
-        (dom/div (dom/props {:class "max-h-full overflow-x-hidden"})
-                 (case view-main
-                   :entity-selection (EntitySelector.)
-                   :conversation (Conversation.))
-                 (when debug? (DBInspector.)))))))
+   (dom/div (dom/props {:class "flex flex-1 h-full w-full"})
+            (dom/on "drop" (e/fn [_] (println "drop ")))
+            (dom/on "dragdrop" (e/fn [_] (println "drop ")))
+            (dom/on "dragenter" (e/fn [_] (println "enter main")))
+            (dom/on "dragleave" (e/fn [_] (println "leave main")))
+            (dom/div (dom/props {:class "relative flex-1 overflow-hidden pb-[100px]"}) ;dark:bg-[#343541] bg-white 
+                     (dom/div (dom/props {:class "max-h-full overflow-x-hidden"})
+                              (case view-main
+                                :entity-selection (EntitySelector.)
+                                :conversation (Conversation.)
+                                :dashboard (AuthAdminDashboard.))
+                              (when debug? (DBInspector.)))))))
 
 (e/defn DebugController []
   (e/client
-    (ui/button
-      (e/fn [] (swap! !debug? not))
-      (dom/props {:class (str "absolute z-30 top-20 right-0 px-4 py-2 rounded text-black"
-                           (if-not debug?
-                             " bg-slate-500"
-                             " bg-red-500"))})
-      (dom/p (dom/text "Debug: " debug?)))))
+   (ui/button
+    (e/fn [] (swap! !debug? not))
+    (dom/props {:class (str "absolute top-0 right-0 z-10 px-4 py-2 rounded text-black"
+                            (if-not debug?
+                              " bg-slate-500"
+                              " bg-red-500"))})
+    (dom/p (dom/text "Debug: " debug?)))))
 
 (e/defn Topbar []
   (e/client
@@ -1012,12 +1256,16 @@
 
 (e/defn Main [ring-request]
   (e/server
-    (binding [dh-conn (e/watch @delayed-connection)]
-      (e/client
-        (binding [dom/node js/document.body]
-          (Topbar.)
-          (dom/main (dom/props {:class "flex h-full w-screen flex-col text-sm absolute top-0 pt-12"}) ;dark:text-white  dark
-            (dom/div (dom/props {:class "flex h-full w-full pt-[48px] sm:pt-0 items-start"}) 
-              (LeftSidebar.)
-              (MainView.)
-              #_(DebugController.))))))))
+   (binding [dh-conn (e/watch @delayed-connection)
+             auth-conn (e/watch @delayed-connection)
+             e/http-request ring-request]
+     (e/client
+      (binding [dom/node js/document.body]
+        (Topbar.)
+        (dom/main (dom/props {:class "flex h-full w-screen flex-col text-sm absolute top-0 pt-12"}) ;dark:text-white  dark
+                  (dom/div (dom/props {:class "flex h-full w-full pt-[48px] sm:pt-0 items-start"})
+                           (LeftSidebar.)
+                           (MainView.)
+                           #_(DebugController.))))))))
+
+

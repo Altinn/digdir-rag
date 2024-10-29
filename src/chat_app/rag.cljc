@@ -13,10 +13,13 @@
 
 (def stage-name "DOCS_QA_RAG")
 
+
 #?(:clj (defonce !response-states (atom [])))
 
 #?(:clj (defn env-var [key]
           (System/getenv key)))
+
+#?(:clj (def use-azure-openai (= "true" (env-var "USE_AZURE_OPENAI_API"))))
 
 #?(:clj (def ts-cfg {:uri (str "https://" (env-var "TYPESENSE_API_HOST"))
                      :key (env-var "TYPESENSE_API_KEY")}))
@@ -34,28 +37,44 @@
                 :items {:type "string"}}}}}}]))
 
 #?(:clj
-   (defn query-relaxation
+   (defn do-query-relaxation
      [user-input & [prompt-rag-query-relax]]
      (let [prompt (or prompt-rag-query-relax "")
            query-result (atom nil)
            _ (prn "user-input:" user-input)]
        (println (str stage-name " model name: " (env-var "OPENAI_API_MODEL_NAME")))
-       (when (= (env-var "LOG_LEVEL") "debug")
-         (println (str "prompt.rag.queryRelax: \n" prompt)))
+       #_(when (= (env-var "LOG_LEVEL") "debug")
+           (println (str "prompt.rag.queryRelax: \n" prompt)))
+       
        (reset! query-result
-         (openai/create-chat-completion
-           {:model (env-var "OPENAI_API_MODEL_NAME")
-            :messages [{:role "system" :content "You are a helpful assistant. Reply with supplied JSON format."}
-                       {:role "user" :content (str "[User query]\n" user-input)}]
-            ;;  :response_format {:type "json_object"}
-            :tools search-results-tools
-            :tool_choice {:type "function"
-                          :function {:name "searchPhrases"}}
-            :temperature 0.1
-            :max_tokens nil}
-           #_{:trace (fn [request response]
-                       (println "Request:" request)
-                       (println "Response:" response))}))
+               (if use-azure-openai
+                 (openai/create-chat-completion
+                  {:model (env-var "AZURE_OPENAI_DEPLOYMENT_NAME")
+                   :messages [{:role "system" :content "You are a helpful assistant. Reply with supplied JSON format."}
+                              {:role "user" :content (str "[User query]\n" user-input)}]
+                   :tools search-results-tools
+                   :tool_choice {:type "function"
+                                 :function {:name "searchPhrases"}}
+                   :temperature 0.1
+                   :max_tokens nil}
+                  {:api-key (env-var "AZURE_OPENAI_API_KEY")
+                   :api-endpoint (env-var "AZURE_OPENAI_ENDPOINT")
+                   :impl :azure
+                   :trace (fn [request response]
+                            #_(println "Request:" request)
+                            (println "Response:" response))})
+                 (openai/create-chat-completion
+                  {:model (env-var "OPENAI_API_MODEL_NAME")
+                   :messages [{:role "system" :content "You are a helpful assistant. Reply with supplied JSON format."}
+                              {:role "user" :content (str "[User query]\n" user-input)}]
+                   :tools search-results-tools
+                   :tool_choice {:type "function"
+                                 :function {:name "searchPhrases"}}
+                   :temperature 0.1
+                   :max_tokens nil}
+                  {:trace (fn [request response]
+                              #_(println "Request:" request)
+                              (println "Response:" response))})))
        (when @query-result
          (let [json (get-in @query-result [:choices 0 :message :tool_calls 0 :function :arguments])
                decoded-results (try
@@ -68,6 +87,23 @@
 
 ;;       #_(doseq [i (range (count (:searchQueries @query-result)))]
 ;;          (swap! query-result update-in [:searchQueries i] #(-> % (.replace "GitHub" "") .trim)))
+
+#?(:clj
+
+   (defn query-relaxation [user-input & [prompt-rag-query-relax]]
+     (let [max-retries 5
+           retry-delay 500] ; 1 second delay between retries
+       (loop [attempt 1]
+         (let [result (try
+                        (do-query-relaxation user-input prompt-rag-query-relax)
+                        (catch Exception e
+                          (println "Error in do-query-relaxation attempt" attempt ":" (.getMessage e))
+                          nil))]
+           (if (or result (>= attempt max-retries))
+             result
+             (do
+               (Thread/sleep retry-delay)
+               (recur (inc attempt)))))))))
 
 #?(:clj
    (defn lookup-search-phrases-similar
@@ -143,8 +179,8 @@
                                (take 20 (medley/distinct-by :chunk_id chunk-id-list)))
            multi-search-args {:searches chunk-searches
                               :limit_multi_searches 40}
-           _ (prn "retrieve-chunks-by-id queries:")
-           _ (prn multi-search-args)
+          ;;  _ (prn "retrieve-chunks-by-id queries:")
+          ;;  _ (prn multi-search-args)
            chunk-results (ts-client/multi-search ts-cfg multi-search-args {:query_by "chunk_id"})
            processed-results (->> chunk-results
                                   :results
@@ -209,7 +245,7 @@
                                   "\n\n</details>\n")))
                               (clojure.string/join "\n"))
            formatted-message (str "Relevante kilder\n" loaded-chunks)
-           _ (println "formatted-message: " formatted-message)
+          ;;  _ (println "formatted-message: " formatted-message)
            _ (d/transact !dh-conn [{:conversation/id (:conversation-id params)
                                     :conversation/messages [{:message/id (nano-id)
                                                              :message/text formatted-message
@@ -301,22 +337,42 @@
            (prn (str "Starting RAG structured output chain, llm: " (env-var "OPENAI_API_MODEL_NAME")))
         ;; (reset! start (System/currentTimeMillis))
 
-           (let [
-                 context-yaml (clojure.string/join "\n\n" (map :page_content @loaded-docs))
+           (let [context-yaml (clojure.string/join "\n\n" (map :page_content @loaded-docs))
                  partial-prompt (:promptRagGenerate params)
                  full-prompt (-> partial-prompt
                                  (str/replace "{context}" context-yaml)
                                  (str/replace "{question}" (:translated_user_query params)))
+                 start-time (System/currentTimeMillis)
               ;; _ (prn full-prompt)
               ;; (if (nil? (:stream_callback_msg1 params)))
-                 chat-response (openai/create-chat-completion
-                                {:model (env-var "OPENAI_API_MODEL_NAME")
-                                 :messages [{:role "system" :content "You are a helpful assistant."}
-                                            {:role "user" :content full-prompt}]
-                                 :temperature 0.1
-                                 :stream false
+                 chat-response
+                 (if use-azure-openai
+                   (openai/create-chat-completion
+                    {:model (env-var "AZURE_OPENAI_DEPLOYMENT_NAME")
+                     :messages [{:role "system" :content "You are a helpful assistant."}
+                                {:role "user" :content full-prompt}]
+                     :temperature 0.1
+                     :max_tokens nil}
+                    {:api-key (env-var "AZURE_OPENAI_API_KEY")
+                     :api-endpoint (env-var "AZURE_OPENAI_ENDPOINT")
+                     :impl :azure
+                     :trace (fn [request response]
+                              #_(println "Request:" request)
+                              (println "Response:" response))})
+                   (openai/create-chat-completion
+                    {:model (env-var "OPENAI_API_MODEL_NAME")
+                     :messages [{:role "system" :content "You are a helpful assistant."}
+                                {:role "user" :content full-prompt}]
+                     :temperature 0.1
+                     :stream false
                                   ;; :on-next (:on-next params)
-                                 :max_tokens nil})
+                     :max_tokens nil}
+                    {:trace (fn [request response]
+                              #_(println "Request:" request)
+                              (println "Response:" response))}))
+                 end-time (System/currentTimeMillis)
+                 duration (- end-time start-time)
+                 _ (println (str "RAG query duration: " duration " ms"))
                  _ (prn "chat-response completed. response:" chat-response) ;; chat-response 
                 ;;  _ (when-let [callback (:on-next params)]
                 ;;      (do

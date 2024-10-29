@@ -1,0 +1,10 @@
+{:all-entities-image "bot.svg"
+ :entities [{:id "71e1adbe-2116-478d-92b8-40b10a612d7b"
+             :name "Kunnskapsassistent - staging"
+             :image "kudos-logo.png"
+             :docs-collection "staging_kudos_docs"
+             :chunks-collection "staging_kudos_chunks"
+             :phrases-collection "staging_kudos_phrases"
+             :phrase-gen-prompt "keyword-search"
+             :reasoning-languages ["en" "no"]
+             :prompt ""}]}

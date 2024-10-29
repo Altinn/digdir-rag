@@ -1,4 +1,4 @@
-fly.toml
+fly*.toml
 Dockerfile
 .dockerignore
 node_modules

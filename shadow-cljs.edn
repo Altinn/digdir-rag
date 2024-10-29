@@ -3,10 +3,22 @@
          :devtools {:loader-mode :default, :watch-dir "resources/public/chat_app"}
          :output-dir "resources/public/chat_app/js"
          :asset-path "/js"
-         :modules {:main {:entries [dev] :init-fn dev/start!}}
+         :module-loader true
+         :modules {:main {:entries [dev]
+                          :init-fn dev/start!
+                     ;;      :depends-on #{:webauthn}
+                          }
+              ;;      :webauthn {:entries [chat-app.webauthn]}
+                   }
          :build-hooks [(hyperfiddle.electric.shadow-cljs.hooks/reload-clj)]}
   :prod {:target :browser
          :output-dir "resources/public/chat_app/js"
          :asset-path "/js"
-         :modules {:main {:entries [prod] :init-fn prod/start!}}
+         :module-loader true
+         :modules {:main {:entries [prod] 
+                          :init-fn prod/start!
+                     ;;      :depends-on #{:webauthn}
+                          }
+              ;;      :webauthn {:entries [chat-app.webauthn]}
+                   }
          :module-hash-names true}}}
