@@ -121,10 +121,10 @@
                :body (json/write-str
                       {:From from
                        :To to
-                       :Subject (str "Kunnskapsassistent - pålogging")
+                       :Subject (str "digdir.cloud - pålogging")
                        :TextBody (str "For å gjennomføre påloggingen, skriv følgende kode i nettleseren: "
                                       code "\n\n"
-                                      "Trenger du assistanse? Vennligst ta kontakt med oss på kunnskap@digdir.cloud.")
+                                      "Trenger du assistanse? Vennligst ta kontakt med oss på hjelp@digdir.cloud.")
                        :HtmlBody (str (h/html
                                        [:html
                                         [:body
@@ -132,7 +132,7 @@
                                          [:p {:style "font-size: 24px; font-weight: bold; color: #2D3748;"} code]
                                          [:p 
                                           [:span "Trenger du assistanse? Vennligst ta kontakt med oss: "]
-                                          [:a {:href "mailto:kunnskap@digdir.cloud"} "kunnskap@digdir.cloud"]
+                                          [:a {:href "mailto:hjelp@digdir.cloud"} "hjelp@digdir.cloud"]
                                           ]]]))
                        :MessageStream "outbound"})}))
 

@@ -1,0 +1,10 @@
+{:all-entities-image "bot.svg"
+ :entities [{:id "7i8dadbe-0101-f0e1-92b8-40b10a61cdcd"
+             :name "KI-veileder - staging"
+             :image "ai-guide-logo.jpg"
+             :docs-collection "AI-GUIDE_docs_2024-10-28"
+             :chunks-collection "AI-GUIDE_chunks_2024-10-28"
+             :phrases-collection "AI-GUIDE_phrases_2024-10-28"
+             :phrase-gen-prompt "keyword-search"
+             :reasoning-languages ["en" "no"]
+             :prompt ""}]}
