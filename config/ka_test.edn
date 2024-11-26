@@ -19,11 +19,12 @@
       :distributed {}}
  :chat {:all-entities-image "bot.svg"
         :entities [{:id "71e1adbe-2116-478d-92b8-40b10a612d7b"
-                    :name "Kunnskapsassistent - staging"
+                    :name "Kunnskapsassistent - test"
                     :image "kudos-logo.png"
-                    :docs-collection "staging_kudos_docs"
-                    :chunks-collection "staging_kudos_chunks"
-                    :phrases-collection "staging_kudos_phrases"
+                    :docs-collection "TEST_kudos-docs"
+                    :chunks-collection "TEST_kudos-chunks"
+                    :phrases-collection "TEST_kudos-phrases"
                     :phrase-gen-prompt "keyword-search"
                     :reasoning-languages ["en" "no"]
                     :prompt ""}]}}
+

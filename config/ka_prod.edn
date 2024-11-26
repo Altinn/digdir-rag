@@ -1,10 +1,29 @@
-{:all-entities-image "bot.svg"
- :entities [{:id "03174558-327a-47a4-93e1-5812955243b6"
-               :name "Kunnskapsassistent"
-               :image "kudos-logo.png"
-               :docs-collection "prod_kudos_docs"
-               :chunks-collection "prod_kudos_chunks"
-               :phrases-collection "prod_kudos_phrases"
-               :phrase-gen-prompt "keyword-search"
-               :reasoning-languages ["en" "no"]
-               :prompt ""}]}
+{:db-env :remote
+ :db {:mem {:store {:backend :mem :id "schemaless"}
+            :schema-flexibility :read}
+      :local {:store {:backend :file
+                      :path "./datahike-db"
+                      :id "schemaless"}
+              :schema-flexibility :read}
+      :remote {:store {:backend :jdbc
+                       :dbtype "postgresql"
+                       :host "aws-0-eu-central-1.pooler.supabase.com"
+                       :port 6543
+                       :dbname "postgres"
+                       :table #env ADH_POSTGRES_TABLE
+                       :user #env ADH_POSTGRES_USER
+                       :password #env ADH_POSTGRES_PWD
+                       :jdbcUrl "jdbc:postgresql://aws-0-eu-central-1.pooler.supabase.com:6543/postgres?pgbouncer=true&sslmode=require&prepareThreshold=0"}
+               :schema-flexibility :read}
+
+      :distributed {}}
+ :chat {:all-entities-image "bot.svg"
+        :entities [{:id "03174558-327a-47a4-93e1-5812955243b6"
+                    :name "Kunnskapsassistent"
+                    :image "kudos-logo.png"
+                    :docs-collection "prod_kudos_docs"
+                    :chunks-collection "prod_kudos_chunks"
+                    :phrases-collection "prod_kudos_phrases"
+                    :phrase-gen-prompt "keyword-search"
+                    :reasoning-languages ["en" "no"]
+                    :prompt ""}]}}

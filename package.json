@@ -1,6 +1,6 @@
 {
   "name": "electric-chat",
-  "packageManager": "yarn@4.5.1",
+  "packageManager": "yarn@4.5.3",
   "scripts": {
     "build:tailwind:dev": "npx tailwindcss -i ./resources/input.css -o ./resources/public/chat_app/styles.css --watch",
     "build:tailwind": "npx tailwindcss -i ./resources/input.css -o ./resources/public/chat_app/styles.css --minify"

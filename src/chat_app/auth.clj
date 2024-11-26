@@ -8,7 +8,7 @@
             [nano-id.core :refer [nano-id]]
             [datahike.api :as d]
             [hiccup2.core :as h]
-            [models.db :as db :refer [cfg delayed-connection schema]]))
+            [models.db :as db :refer [cfg delayed-connection dh-schema]]))
 
 ;; ### Key Metrics to Track for Security
 ;; 1. **Failed login attempts**: Monitor for brute force attempts.
@@ -61,9 +61,9 @@
 
 (def secret "cd5e984eaf41-16f2b708-9af6-497f")
 
-(def domain-whitelist #{"@digdir.no" "@digdir.cloud" "@dfd.dep.no" "@itonomi.com"})
+(def domain-whitelist #{"@digdir.no" "@dfd.dep.no" "@dfo.no" "@digdir.cloud" "@itonomi.com"})
 
-(def admin-users #{"wd@itonomi.com" "bdb@itonomi.com"})
+(def admin-users #{"wd@itonomi.com" "bdb@itonomi.com" "olavfosse@itonomi.com"})
 
 (defn admin-user? [email]
   (contains? admin-users email))

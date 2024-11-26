@@ -1,10 +1,29 @@
-{:all-entities-image "bot.svg"
- :entities [{:id "7i8dadbe-0101-f0e1-92b8-40b10a61cdcd"
-             :name "AI Guide - dev"
-             :image "ai-guide-logo.jpg"
-             :docs-collection "AI-GUIDE_docs_2024-10-28"
-             :chunks-collection "AI-GUIDE_chunks_2024-10-28"
-             :phrases-collection "AI-GUIDE_phrases_2024-10-28"
-             :phrase-gen-prompt "keyword-search"
-             :reasoning-languages ["en" "no"]
-             :prompt ""}]}
+{:db-env :remote
+ :db {:mem {:store {:backend :mem :id "schemaless"}
+            :schema-flexibility :read}
+      :local {:store {:backend :file
+                      :path "./datahike-db"
+                      :id "schemaless"}
+              :schema-flexibility :read}
+      :remote {:store {:backend :jdbc
+                       :dbtype "postgresql"
+                       :host "aws-0-eu-central-1.pooler.supabase.com"
+                       :port 6543
+                       :dbname "postgres"
+                       :table #env ADH_POSTGRES_TABLE
+                       :user #env ADH_POSTGRES_USER
+                       :password #env ADH_POSTGRES_PWD
+                       :jdbcUrl "jdbc:postgresql://aws-0-eu-central-1.pooler.supabase.com:6543/postgres?pgbouncer=true&sslmode=require&prepareThreshold=0"}
+               :schema-flexibility :read}
+ 
+      :distributed {}}
+ :chat {:all-entities-image "bot.svg"
+        :entities [{:id "7i8dadbe-0101-f0e1-92b8-40b10a61cdcd"
+                    :name "AI Guide - dev"
+                    :image "ai-guide-logo.jpg"
+                    :docs-collection "AI-GUIDE_docs_2024-10-28"
+                    :chunks-collection "AI-GUIDE_chunks_2024-10-28"
+                    :phrases-collection "AI-GUIDE_phrases_2024-10-28"
+                    :phrase-gen-prompt "keyword-search"
+                    :reasoning-languages ["en" "no"]
+                    :prompt ""}]}}

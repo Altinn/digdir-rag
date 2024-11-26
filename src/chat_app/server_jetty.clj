@@ -53,7 +53,10 @@
            [:meta {:charset "utf-8"}]
            [:title "Sjekk din innboks"]
            [:link {:rel "stylesheet"
-                   :href "/styles.css"}]]
+                   :href "/styles.css"}]
+           [:link {:rel "icon"
+                   :type "image/svg+xml"
+                   :href "digdir_icon.svg"}]]
           [:body {:class "flex justify-center items-center bg-slate-100"}
            [:div {:class "flex flex-col gap-4"}
             [:h1 {:class "text-4xl font-bold text-center"} "Sjekk innboksen din"]
@@ -63,8 +66,10 @@
                     :method "post"
                     :class "flex flex-col gap-4"}
              [:input {:type "hidden" :name "email" :value email}]
+
              [:input {:type "text" :name "confirmation-code" :placeholder "6-sifret kode"
-                      :required true :maxlength "6" :pattern "\\d{6}" :title "Skriv din 6-sifret kode"}]
+                      :required true :maxlength "6" :pattern "\\d{6}" :title "Skriv din 6-sifret kode"
+                      :autofocus true}]
              [:button {:type "submit"
                        :class "px-4 py-2 bg-black hover:bg-slate-800 text-white rounded"}
               "Logg på"]]
@@ -76,22 +81,26 @@
          [:head
           [:title title]
           [:link {:rel "stylesheet"
-                  :href "/styles.css"}]]
+                  :href "/styles.css"}]
+          [:link {:rel "icon"
+                  :type "image/svg+xml"
+                  :href "digdir_icon.svg"}]]
          [:body {:class "flex justify-center items-center bg-slate-100"}
           [:div {:class "p-8 shadow bg-white flex flex-col gap-4 rounded-lg w-96"}
            [:h1 {:class "text-2xl font-bold text-center"} title]
            [:form {:action "/auth"
                    :method "post"
-                   :class "flex flex-col gap-4"} 
-            [:input {:type "email" :id "email" :name "email" :placeholder "E-post adresse" :required true}]
+                   :class "flex flex-col gap-4"}
+            
+            [:input {:type "email" :id "email" :name "email" :placeholder "E-post adresse" :required true :autofocus true}]
             [:button {:type "submit"
                       :class "px-4 py-2 bg-black hover:bg-slate-800 text-white rounded"}
              "Fortsett"]]
            (if (= action "/auth")
              [:p "Har du en konto allerede? " [:a {:href "/login"
-                                                  :class "text-green-500"} "Sign in"]]
+                                                   :class "text-green-500"} "Sign in"]]
              [:p "Trenger du en brukerkonto? " [:a {:href "/auth"
-                                                :class "text-green-500"} "Sign up"]])]]])))
+                                                    :class "text-green-500"} "Sign up"]])]]])))
 
 
 (defn email-signup []
@@ -335,8 +344,7 @@ information."
 
   (d/pull auth/conn)
 
-
+  (user-key "test@digdir.no")
   
-  (user-key "alice3@gmail.com")
-
+  ;;
   )

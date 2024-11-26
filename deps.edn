@@ -7,7 +7,8 @@
            org.postgresql/postgresql {:mvn/version "42.7.3"}
            net.clojars.wkok/openai-clojure {:mvn/version "0.18.1"}
            nano-id/nano-id {:mvn/version "1.0.0"}
-           io.github.nextjournal/markdown {:mvn/version "0.5.144"}
+           aero/aero {:mvn/version "1.1.6"}
+           io.github.nextjournal/markdown {:mvn/version "0.6.157"}
            hiccup/hiccup {:mvn/version "2.0.0-RC3"}
            markdown-clj/markdown-clj {:mvn/version "1.12.1"}
            clj-http/clj-http {:mvn/version "3.12.3"}
