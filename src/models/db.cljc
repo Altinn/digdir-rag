@@ -1,6 +1,7 @@
 (ns models.db
   (:require [nano-id.core :refer [nano-id]]
             [chat-app.kit :as kit]
+            [clojure.edn :as edn]
             #?(:clj [datahike.api :as d])
             #?(:clj [datahike-jdbc.core])
             #?(:clj [aero.core :as aero])))
@@ -21,13 +22,16 @@
    (def cfg (get-in config [:db (:db-env config)])))
 
 (def dh-schema
-  [{:db/ident :folder/id
+  [;; Folder
+   {:db/ident :folder/id
     :db/valueType :db.type/string
     :db/cardinality :db.cardinality/one
     :db/unique :db.unique/identity}
    {:db/ident :folder/name
     :db/valueType :db.type/string
     :db/cardinality :db.cardinality/one}
+
+   ;; prompt.folder
    {:db/ident :prompt.folder/id
     :db/valueType :db.type/string
     :db/cardinality :db.cardinality/one
@@ -35,10 +39,14 @@
    {:db/ident :prompt.folder/name
     :db/valueType :db.type/string
     :db/cardinality :db.cardinality/one}
+
+   ;; Prompt
    {:db/ident :prompt/id
     :db/valueType :db.type/string
     :db/cardinality :db.cardinality/one
     :db/unique :db.unique/identity}
+   
+   ;; Conversation
    {:db/ident :conversation/id
     :db/valueType :db.type/string
     :db/cardinality :db.cardinality/one
@@ -49,6 +57,8 @@
    {:db/ident :conversation/messages
     :db/valueType :db.type/ref
     :db/cardinality :db.cardinality/many}
+
+   ;; Text message
    {:db/ident :message/id
     :db/valueType :db.type/string
     :db/cardinality :db.cardinality/one
@@ -59,6 +69,16 @@
    {:db/ident :message/completion
     :db/valueType :db.type/boolean
     :db/cardinality :db.cardinality/one}
+
+   ;; Filter message
+   {:db/ident :message/id
+    :db/valueType :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/unique :db.unique/identity}
+   {:db/ident :message.filter/value 
+    :db/valueType :db.type/string ;; edn - clojure.edn/read-string
+    :db/cardinality :db.cardinality/one}
+   
    {:db/ident :active-key-name
     :db/valueType :db.type/string
     :db/cardinality :db.cardinality/one}
@@ -110,55 +130,36 @@
                              [?msg :message/created ?msg-created]]
                            db convo-id-str))))
 
+(defn T
+  "For debugging
+  Input → ___ → Output
+           |
+           |
+           ↓
+        Console"
+  ([x]
+   (prn x)
+   x)
+  ([tag x]
+   (prn tag x)
+   x))
 
 #?(:clj
    (defn fetch-convo-messages-mapped
-     ([dh-conn convo-id-str]
-      (fetch-convo-messages-mapped dh-conn convo-id-str nil))
-     ([dh-conn convo-id-str voice]
-      (if (nil? convo-id-str)
-        (do
-          (prn "returning nil, convo-id-str is nil")
-          nil)
-        (do
-          (prn "fetching messages for convo id: " convo-id-str)
-          (let [query (if voice
-                        '[:find ?msg-created ?msg-id ?msg-text ?msg-role ?msg-kind ?msg-completion
-                          :in $ ?conv-id ?msg-voice
-                          :where
-                          [?e :conversation/id ?conv-id]
-                          [?e :conversation/messages ?msg]
-                          [?msg :message/id ?msg-id]
-                          [?msg :message/role ?msg-role]
-                          [?msg :message/voice ?msg-voice]
-                          [?msg :message/completion ?msg-completion]
-                          [?msg :message/kind ?msg-kind]
-                          [?msg :message/text ?msg-text]
-                          [?msg :message/created ?msg-created]]
-                        '[:find ?msg-created ?msg-id ?msg-text ?msg-role ?msg-kind ?msg-completion ?msg-voice
-                          :in $ ?conv-id
-                          :where
-                          [?e :conversation/id ?conv-id]
-                          [?e :conversation/messages ?msg]
-                          [?msg :message/id ?msg-id]
-                          [?msg :message/role ?msg-role]
-                          [?msg :message/voice ?msg-voice]
-                          [?msg :message/completion ?msg-completion]
-                          [?msg :message/kind ?msg-kind]
-                          [?msg :message/text ?msg-text]
-                          [?msg :message/created ?msg-created]])
-                opt-args (if voice [voice] [])
-                results (apply d/q query dh-conn convo-id-str opt-args)]
+     [dh-conn convo-id]
+      (->> (d/q '[:find (pull ?msg [*])
+                  :in $ ?convo-id
+                  :where
+                  [?c :conversation/id ?convo-id]
+                  [?c :conversation/messages ?msg]]
+                dh-conn
+                convo-id)
+           (map first)
+           (map #(update % :message.filter/value edn/read-string))
+           
+           (sort-by :message/created <)
+           #_T)))
 
-            (mapv (fn [[created id text role kind completion voice]]
-                    {:message/created created
-                     :message/id id
-                     :message/text text
-                     :message/role role
-                     :message/voice voice
-                     :message/completion completion
-                     :message/kind kind})
-                  (sort-by first < results))))))))
 
 #?(:clj
    (defn fetch-convo-entity-id [db convo-id]
@@ -182,29 +183,32 @@
                               [?m :message/text ?msg-text]
                               [?c :conversation/messages ?m]
                               [?c :conversation/topic ?topic]
+                              [?c :conversation/entity-id ?entity-id]
                               (or-join [?msg-text ?topic]
                                        [(?includes-fn ?msg-text search-txt)]
                                        [(?includes-fn ?topic search-txt)])]
                             db search-text kit/lowercase-includes?)]
-        (sort-by first > (d/q '[:find ?created ?e ?conv-id ?topic
+        (sort-by first > (d/q '[:find ?created ?e ?conv-id ?topic ?entity-id
                                 :in $ [?e ...]
                                 :where
                                 [?e :conversation/id ?conv-id]
                                 [?e :conversation/topic ?topic]
-                                [?e :conversation/created ?created]]
+                                [?e :conversation/created ?created]
+                                [?c :conversation/entity-id ?entity-id]]
                               db convo-eids))))
      ([db]
-      (sort-by first > (d/q '[:find ?created ?e ?conv-id ?topic
+      (sort-by first > (d/q '[:find ?created ?e ?conv-id ?topic ?entity-id
                               :where
                               [?e :conversation/id ?conv-id]
                               [?e :conversation/topic ?topic]
                               [?e :conversation/created ?created]
+                              [?c :conversation/entity-id ?entity-id]
                               (not [?e :conversation/folder])]
                             db)))))
 
 #?(:clj
    (defn conversations-in-folder [db folder-id]
-     (sort-by first > (d/q '[:find ?created ?c ?c-id ?topic ?folder-name
+     (sort-by first > (d/q '[:find ?created ?c ?c-id ?topic ?folder-name ?entity-id
                              :in $ ?folder-id
                              :where
                              [?e :folder/id ?folder-id]
@@ -212,7 +216,8 @@
                              [?c :conversation/folder ?folder-id]
                              [?c :conversation/id ?c-id]
                              [?c :conversation/topic ?topic]
-                             [?c :conversation/created ?created]]
+                             [?c :conversation/created ?created]
+                             [?c :conversation/entity-id ?entity-id]]
                            db folder-id))))
 
 #?(:clj
@@ -333,6 +338,55 @@
                         (mapv (fn [eid] [:db.fn/retractEntity eid :folder/id]) folder-eids))]
     (d/transact conn retraction-ops)))
 
+#?(:clj
+   (defn transact-new-msg-thread2 [conn entity-id]
+     (let [convo-id (nano-id)
+           time-point (System/currentTimeMillis)
+           tx-data
+           {:conversation/id convo-id
+            :conversation/entity-id entity-id
+            :conversation/topic "Ny samtale"
+            :conversation/created time-point
+            :conversation/system-prompt "sys-prompt"
+            :conversation/messages [{:message/id (nano-id)
+                                     :message/text "You are a helpful assistant."
+                                     :message/role :system
+                                     :message/voice :agent
+                                     :message/completion true
+                                     :message/kind :kind/text
+                                     :message/created time-point}
+                                    {:message/id (nano-id)
+                                     :message/voice :filter
+                                     :message/created (inc time-point)
+                                     :message/completion false
+                                     :message.filter/value
+                                     (pr-str {:type :typesense
+                                              :fields [{:type :multiselect
+                                                        :expanded? true
+                                                        :selected-options #{}
+                                                        :field "type"}
+                                                       {:type :multiselect
+                                                        :expanded? true
+                                                        :selected-options #{}
+                                                        :field "orgs_long"}
+                                                       {:type :multiselect
+                                                        :expanded? true
+                                                        :selected-options #{}
+                                                        :field "source_published_year"}]}
+                                             
+                                             )}]}
+           _ (prn "transact-new-msg-thread2 called" )]
+       (d/transact conn [tx-data])
+       {:conversation-id convo-id})))
+
+
+#?(:clj
+   (defn set-message-filter [conn id new-message-filter]
+     (prn [new-message-filter])
+     (d/transact conn [{:db/id id
+                        :message.filter/value (pr-str new-message-filter)}])
+     nil))
+
 (comment
 
   ;; Helpers
@@ -414,4 +468,5 @@
 
 ;; End comment
   )
+
 

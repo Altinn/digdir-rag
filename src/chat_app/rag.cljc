@@ -11,6 +11,19 @@
             #?(:clj [datahike.api :as d])
             #?(:clj [models.db :as db :refer [delayed-connection]])
             #?(:clj [markdown.core :as md2])))
+(defn T
+  "For debugging
+  Input → ___ → Output
+           |
+           |
+           ↓
+        Console"
+  ([x]
+   (prn x)
+   x)
+  ([tag x]
+   (prn tag x)
+   x))
 
 (def stage-name "DOCS_QA_RAG")
 
@@ -49,17 +62,17 @@
 #?(:clj (def ts-cfg {:uri (str "https://" (env-var "TYPESENSE_API_HOST"))
                      :key (env-var "TYPESENSE_API_KEY")}))
 
-#?(:clj 
+#?(:clj
    (def search-results-tools
-          [{:type "function"
-            :function
-            {:name "searchPhrases"
-             :parameters
-             {:type "object"
-              :properties
-              {:searchPhrases
-               {:type "array"
-                :items {:type "string"}}}}}}]))
+     [{:type "function"
+       :function
+       {:name "searchPhrases"
+        :parameters
+        {:type "object"
+         :properties
+         {:searchPhrases
+          {:type "array"
+           :items {:type "string"}}}}}}]))
 
 #?(:clj
    (defn do-query-relaxation
@@ -98,12 +111,10 @@
                                  :function {:name "searchPhrases"}}
                    :temperature 0.1
                    :max_tokens nil}
-                  {
-                  ;;  :trace (fn [request response]
+                  {;;  :trace (fn [request response]
                   ;;           #_(println "Request:" request)
                   ;;           (println "Response:" response))
-                  }
-                  )))
+                   })))
        (when @query-result
          (let [json (get-in @query-result [:choices 0 :message :tool_calls 0 :function :arguments])
                decoded-results (try
@@ -135,28 +146,443 @@
                (recur (inc attempt)))))))))
 
 #?(:clj
+   (defn filter-map->typesense-filter
+     "Converts a filter map to a Typesense filter_by string"
+     [{:keys [fields]} docs-collection-name]
+     (let [selected-fields (->> fields
+                                (map (fn [{:keys [field selected-options]}]
+                                       (when (seq selected-options)
+                                         (str field ":=[" 
+                                              (clojure.string/join "," 
+                                              (map #(str "'" % "'") selected-options))
+                                              "]"))))
+                                (remove nil?))]
+       (when (seq selected-fields)
+         (str "$" docs-collection-name "("
+              (clojure.string/join " && " selected-fields)
+              ")")))))
+
+(comment 
+  
+
+  (filter-map->typesense-filter
+   {:fields [{:type :multiselect
+              :selected-options #{"DFD"}
+              :field "orgs_short"}
+             {:type :multiselect
+              :selected-options #{"Digdir"}
+              :field "owner_short"}]}
+   "my_collection")
+  
+  
+)
+
+
+
+#?(:clj
+   (defn filter-map->typesense-facet-multi-search
+     "Converts a filter map to a Typesense multi-search with disjunctive faceting"
+     [{:keys [fields max-options]} docs-collection-name]
+     (let [all-field-names (map :field fields)
+
+           ;; Helper function to create filter string
+           create-filter-str (fn [excluded-field]
+                               (->> fields
+                                    (remove #(= (:field %) excluded-field))
+                                    (map (fn [{:keys [field selected-options]}]
+                                           (str field ":=[" 
+                                                (clojure.string/join "," 
+                                              (map #(str "`" % "`") selected-options))
+                                                "]")))
+                                    (clojure.string/join " && ")))
+
+           ;; Main search with all filters and facets
+           main-search (into {} 
+                             (remove (fn [[_ v]] (#{"" nil} v)))
+                             {:q "*"
+                              :query_by "doc_num"
+                              :facet_by (clojure.string/join "," all-field-names)
+                              :page 1
+
+                              :max_facet_values 10
+                              :per_page 6
+                              :collection docs-collection-name})
+
+           ;; Individual facet searches
+           facet-searches (map (fn [{:keys [field]}]
+                                 {:q "*"
+                                  :query_by "doc_num"
+                                  :facet_by field
+                                  :page 1
+                                  :filter_by (create-filter-str field)
+                                  :max_facet_values 10
+                                  
+                                  :collection docs-collection-name})
+                               fields)] 
+
+       {:searches (cons main-search facet-searches)})))
+
+
+(comment
+
+  (def input-filter-maps
+    [;;
+     {:type :typesense
+      :max-options 30
+      :fields [{:type :multiselect
+                :selected-options #{"DFD"}
+                :field "orgs_short"}
+               {:type :multiselect
+                :selected-options #{}
+                :field "owner_short"}]}
+     {:type :typesense
+      :max-options 30
+      :fields [{:type :multiselect
+                :selected-options #{"DFD"}
+                :field "orgs_short"}
+               {:type :multiselect
+                :selected-options #{"Digdir"}
+                :field "owner_short"}]}
+     {:type :typesense
+      :max-options 30
+      :fields [{:type :multiselect
+                :selected-options #{"DFD","KDD"}
+                :field "orgs_short"}
+               {:type :multiselect
+                :selected-options #{"DFD"}
+                :field "owner_short"}
+               {:type :multiselect
+                :selected-options #{}
+                :field "publisher_short"}]}
+     {:type :typesense
+      :max-options 30
+      :fields [{:type :multiselect
+                :selected-options #{"DFD","KDD"}
+                :field "orgs_short"}
+               {:type :multiselect
+                :selected-options #{"Digdir","DFD"}
+                :field "owner_short"}
+               {:type :multiselect
+                :selected-options #{}
+                :field "publisher_short"}
+               {:type :multiselect
+                :selected-options #{"DFD"}
+                :field "recipient_short"}]}
+     {:type :typesense
+      :max-options 30
+      :fields [{:type :multiselect
+                :selected-options #{}
+                :field "orgs_short"}
+               {:type :multiselect
+                :selected-options #{}
+                :field "owner_short"}
+               {:type :multiselect
+                :selected-options #{}
+                :field "publisher_short"}
+               {:type :multiselect
+                :selected-options #{}
+                :field "recipient_short"}]}
+     ])
+
+  ;; (def output-search-config
+  ;;   (filter-map->typesense-facet-multi-search
+  ;;    input-filter-map
+  ;;    "KUDOS_docs_2024-12-10")) 
+  
+
+  (def target-search-config
+    [{:searches
+      [{:collection "KUDOS_docs_2024-12-10",
+        :q "*",
+        :query_by "doc_num",
+        :facet_by "orgs_short,owner_short",
+        :filter_by "orgs_short:=[`DFD`]",
+        :max_facet_values 30,
+        :page 1,
+        :per_page 1}
+       {:collection "KUDOS_docs_2024-12-10",
+        :q "*",
+        :query_by "doc_num",
+        :facet_by "orgs_short",
+        :max_facet_values 30,
+        :page 1
+        :per_page 1}]}
+     
+     ;; n 3
+     {:searches
+      [;;
+       {:collection "KUDOS_docs_2024-12-10",
+        :q "*",
+        :query_by "doc_num",
+        :max_facet_values 30,
+        :page 1,
+        :per_page 1,
+        :facet_by "orgs_short,owner_short",
+        :filter_by "orgs_short:=[`DFD`] && owner_short:=[`Digdir`]"}
+       {:collection "KUDOS_docs_2024-12-10",
+        :q "*",
+        :query_by "doc_num",
+        :max_facet_values 30,
+        :page 1,
+        :per_page 1
+        :facet_by "orgs_short"}]}
+     {:searches
+      [{:q "*",
+        :query_by "doc_num",
+        :facet_by "orgs_short,owner_short,publisher_short",
+        :page 1,
+        :filter_by "orgs_short:=[`DFD`,`KDD`] && owner_short:=[`DFD`]",
+        :max_facet_values 10,
+        :per_page 6,
+        :collection "KUDOS_docs_2024-12-10"}
+       {:query_by "doc_num",
+        :highlight_full_fields "doc_num",
+        :collection "KUDOS_docs_2024-12-10",
+        :q "*",
+        :facet_by "orgs_short",
+        :filter_by "owner_short:=[`DFD`]",
+        :page 1}
+       {:query_by "doc_num",
+        :highlight_full_fields "doc_num",
+        :collection "KUDOS_docs_2024-12-10",
+        :q "*",
+        :facet_by "owner_short",
+        :filter_by "orgs_short:=[`DFD`,`KDD`]",
+        :page 1}]}
+     {:searches
+      [{:q "*",
+        :query_by "doc_num",
+        :facet_by "orgs_short,owner_short,publisher_short,recipient_short",
+        :page 1,
+        :filter_by
+        "orgs_short:=[`DFD`,`KDD`] && owner_short:=[`DFD`,`Digdir`] && recipient_short:=[`DFD`]",
+        :max_facet_values 10,
+        :per_page 6,
+        :collection "KUDOS_docs_2024-12-10"}
+       {:query_by "doc_num",
+        :collection "KUDOS_docs_2024-12-10",
+        :q "*",
+        :facet_by "orgs_short",
+        :filter_by
+        "owner_short:=[`DFD`,`Digdir`] && recipient_short:=[`DFD`]",
+        :max_facet_values 10,
+        :page 1}
+       {:query_by "doc_num",
+        :collection "KUDOS_docs_2024-12-10",
+        :q "*",
+        :facet_by "owner_short",
+        :filter_by "orgs_short:=[`DFD`,`KDD`] && recipient_short:=[`DFD`]",
+        :max_facet_values 10,
+        :page 1}
+       {:query_by "doc_num",
+        :collection "KUDOS_docs_2024-12-10",
+        :q "*",
+        :facet_by "recipient_short",
+        :filter_by
+        "orgs_short:=[`DFD`,`KDD`] && owner_short:=[`DFD`,`Digdir`]",
+        :max_facet_values 10,
+        :page 1}]}
+
+     ;; n 4
+     {:searches
+      [{:q "*",
+        :query_by "doc_num",
+        :facet_by "orgs_short,owner_short,publisher_short,recipient_short",
+        :page 1,
+        :filter_by
+        "orgs_short:=[`DFD`,`KDD`] && owner_short:=[`DFD`,`Digdir`] && recipient_short:=[`DFD`]",
+        :max_facet_values 10,
+        :per_page 6,
+        :collection "KUDOS_docs_2024-12-10"}
+       {:query_by "doc_num",
+        :collection "KUDOS_docs_2024-12-10",
+        :q "*",
+        :facet_by "orgs_short",
+        :filter_by
+        "owner_short:=[`DFD`,`Digdir`] && recipient_short:=[`DFD`]",
+        :max_facet_values 10,
+        :page 1}
+       {:query_by "doc_num",
+        :collection "KUDOS_docs_2024-12-10",
+        :q "*",
+        :facet_by "owner_short",
+        :filter_by "orgs_short:=[`DFD`,`KDD`] && recipient_short:=[`DFD`]",
+        :max_facet_values 10,
+        :page 1}
+       {:query_by "doc_num",
+        :collection "KUDOS_docs_2024-12-10",
+        :q "*",
+        :facet_by "recipient_short",
+        :filter_by
+        "orgs_short:=[`DFD`,`KDD`] && owner_short:=[`DFD`,`Digdir`]",
+        :max_facet_values 10,
+        :page 1}]}])
+
+  (def n 4)
+
+  (= (filter-map->typesense-facet-multi-search
+      (nth input-filter-maps n)
+      "KUDOS_docs_2024-12-10")
+     (nth target-search-config n))
+
+  )
+
+
+
+(comment
+  (mapv
+   (partial facet-result->ui-field filter-map)
+   (:results result))
+
+  (mapv
+   facet-result->ui-field
+   (:results result)
+   (repeat filter-map)))
+
+(defn rcomp [& fns]
+  (apply comp (reverse fns)))
+
+#?(:clj
+   (defn field->counts [facet_counts]
+     (into {}
+           (map (fn [{:keys [counts field_name]}]
+                  [field_name counts]))
+           facet_counts)))
+
+
+
+#?(:clj 
+   (defn options [res]
+     (def options-input res)
+     ;; If there is no selection for a given field, we find the option
+     ;; data in all-facets, otherwise in rest-facets.
+     (let [fallback-field->counts (->> res first :facet_counts field->counts)
+           fallback-field->zero-counts (-> fallback-field->counts
+                                           (update-vals (partial mapv #(assoc % :count 0))))]
+
+       (into {}
+             (map (fn [field-res]
+                    (let [{:as facet_counts
+                           :keys [field_name counts]} (get-in field-res [:facet_counts 0])]
+                      [field_name
+                       (->> (if (empty? counts)
+                              (fallback-field->counts field_name)
+                              (->>
+                               (merge (medley/index-by :value (fallback-field->zero-counts field_name))
+                                      (medley/index-by :value counts))
+                               vals))
+                            (sort-by :value)
+                            vec)])))
+             (rest res)))))
+
+
+
+(comment
+  (def test-entity {:id "71e1adbe-2116-478d-92b8-40b10a612d7b"
+                    :name "Kunnskapsassistent - DEV"
+                    :image "kudos-logo.png"
+                    :docs-collection "KUDOS_docs_2024-12-10" 
+                    :chunks-collection "KUDOS_chunks_2024-12-10" 
+                    :phrases-collection "KUDOS_phrases_2024-12-10" 
+                    :phrase-gen-prompt "keyword-search"
+                    :reasoning-languages ["en" "no"]
+                    :prompt ""})
+
+  ;; Base case: nothing selected
+  (= (->> (fetch-facets test-entity
+                        {:type :typesense
+                         :fields [{:type :multiselect
+                                   :expanded? true
+                                   :selected-options #{}
+                                   :field "type"}
+                                  {:type :multiselect
+                                   :expanded? true
+                                   :selected-options #{}
+                                   :field "orgs_short"}]})
+          :ui/fields
+          (mapv (juxt :field :options))
+          set)
+     #{["type" [{:count 32, :value "Tildelingsbrev", :selected? false} {:count 1, :value "Instruks", :selected? false} {:count 4, :value "Evaluering", :selected? false} {:count 10, :value "Årsrapport", :selected? false}]]
+      
+      ["orgs_short" [{:count 13, :value "Digdir", :selected? false} {:count 1, :value "NFD", :selected? false} {:count 32, :value "DFD", :selected? false} {:count 8, :value "DSB", :selected? false} {:count 1, :value "NGU", :selected? false} {:count 9, :value "KDD", :selected? false} {:count 8, :value "JD", :selected? false} {:count 1, :value "Statsforvalterens fellestjenester", :selected? false} {:count 1, :value "NFR", :selected? false} {:count 22, :value "Departementenes sikkerhets- og serviceorganisasjon", :selected? false}]]
+
+       })
+
+  (->> (fetch-facets test-entity
+                     {:type :typesense
+                      :fields [{:type :multiselect
+                                :expanded? true
+                                :selected-options #{"Tildelingsbrev"}
+                                :field "type"}
+                               {:type :multiselect
+                                :expanded? true
+                                :selected-options #{}
+                                :field "orgs_short"}]})
+       :ui/fields
+       (mapv (juxt :field :options))
+       set)
+
+  
+  
+  
+  )
+
+#?(:clj
+   (defn facet-result->ui-field [{:as filter-field :keys [selected-options]} options]
+    (comment (facet-result->ui-field filter-field options))
+    (assoc filter-field :options (mapv (fn [{:keys [count value]}]
+                                         {:count count
+                                          :value value
+                                          :selected? (boolean (selected-options value))})
+                                       options))))
+
+#?(:clj
+   (defn fetch-facets [conversation-entity filter-map]
+     (let [multi-search (filter-map->typesense-facet-multi-search
+                         filter-map
+                         (:docs-collection conversation-entity))]
+       (try
+         (let [results (:results (ts-client/multi-search ts-cfg multi-search {:query_by "doc_num"}))
+               opts (options results)]
+           (assoc filter-map :ui/fields (mapv (fn [filter-field]
+                                                (facet-result->ui-field filter-field (opts (:field filter-field))))
+                                              (:fields filter-map))))
+         (catch Exception e
+           (println "Error in fetch-facets:" (.getMessage e) "Error: " (str e) "queries:" multi-search)
+           filter-map)))))
+   
+
+#?(:clj
+   (defn prepare-conversation [dh-conn convo-id conversation-entity]
+     (mapv
+      #(cond-> %
+         (:message.filter/value %) (update :message.filter/value (partial fetch-facets conversation-entity)))
+      (db/fetch-convo-messages-mapped dh-conn convo-id))))
+
+#?(:clj
    (defn lookup-search-phrases-similar
-     [phrases-collection-name relaxed-queries prompt]
+     [phrases-collection-name docs-collection-name relaxed-queries prompt filter-by]
+     (println "lookup-search-phrases-similar()" "filter-by:" filter-by)
      (if (or (nil? relaxed-queries) (nil? phrases-collection-name) (nil? prompt))
        (do
          (println "typesenseSearchMultiple() - search terms not provided")
          [])
-       (let [multi-search-args {:searches (map (fn [query]
-                                                 {:collection phrases-collection-name
-                                                  :q query
-                                                  :include_fields "chunk_id,search_phrase"
-                                                  :exclude_fields "phrase_vec"
-                                                  :filter_by (str "prompt:=`" prompt "`") ;; check if backtick escape needed when filter value has a space
-                                                  ;; :group_by "chunk_id"
-                                                  ;; :group_limit 1
-                                                  :limit 20
-                                                  :sort_by "_text_match:desc"
-                                                  :prioritize_exact_match false
-                                                  :drop_tokens_threshold 5})
+       (let [typesense-filter (filter-map->typesense-filter filter-by docs-collection-name)
+             multi-search-args {:searches (map (fn [query]
+                                                 (merge
+                                                  {:collection phrases-collection-name
+                                                   :q query
+                                                   :include_fields "chunk_id,search_phrase"
+                                                   :exclude_fields "phrase_vec"
+                                                   :limit 20
+                                                   :sort_by "_text_match:desc"
+                                                   :prioritize_exact_match false
+                                                   :drop_tokens_threshold 5}
+                                                  (when (not-empty typesense-filter) 
+                                                    {:filter_by typesense-filter})))
                                                relaxed-queries)}]
-         (when (= 1 1) #_(or true (= (env-var "LOG_LEVEL") "debug-relaxation"))
-          ;;  (prn "lookupSearchPhraseSimilar query args:")
-               (prn multi-search-args))
+         (prn "lookup-search-phrases-similar queries:")
+         (prn multi-search-args)
          (let [response (ts-client/multi-search ts-cfg multi-search-args {:query_by "search_phrase,phrase_vec"})
                indexed-search-phrase-hits (->> (:results response)
                                                (mapcat :hits)
@@ -167,9 +593,9 @@
                                      :rank (get-in phrase [:hybrid_search_info :rank_fusion_score])
                                      :index (:index phrase)})
                                   indexed-search-phrase-hits)]
-           (when (= 1 1) #_(= (env-var "LOG_LEVEL") "debug-relaxation")
-            ;;  (prn "lookupSearchPhraseSimilar results:")
-                 (prn response))
+           (when (= 1 1)
+             (prn "lookupSearchPhraseSimilar results:")
+             (prn response))
            chunk-id-list)))))
 
 #?(:clj
@@ -203,13 +629,13 @@
                                   :filter_by (str "chunk_id:=`" (:chunk_id chunk-matches) "`")
                                   :page 1
                                   :per_page 1})
-                       ;; must be at least xx results, otherwise endpoint returns empty list
-                       ;; TODO: add minimum check
+                               ;; must be at least xx results, otherwise endpoint returns empty list
+                               ;; TODO: add minimum check
                                (take 20 (medley/distinct-by :chunk_id chunk-id-list)))
            multi-search-args {:searches chunk-searches
                               :limit_multi_searches 40}
-          ;;  _ (prn "retrieve-chunks-by-id queries:")
-          ;;  _ (prn multi-search-args)
+           _ (prn "retrieve-chunks-by-id queries:")
+           _ (prn multi-search-args)
            chunk-results (ts-client/multi-search ts-cfg multi-search-args {:query_by "chunk_id"})
            processed-results (->> chunk-results
                                   :results
@@ -217,6 +643,23 @@
                                   (map :document))]
        processed-results)))
 
+
+
+#?(:clj
+   (defn retrieve-facets
+     [docs-collection-name fields]
+     (-> (ts-client/multi-search
+          ts-cfg
+          {:searches
+           [{:collection docs-collection-name
+             :q "*"
+             :include_fields "doc_num"
+             :facet_by fields
+             :page 1
+             :per_page 1
+             :max_facet_values 30}]}
+          {:query_by "doc_num"})
+         (get-in [:results 0 :facet_counts 0 :counts]))))
 
 #?(:clj
    (defn retrieve-all-by-id
@@ -236,7 +679,7 @@
    (defn rag-generate [!dh-conn convo-id extract-search-queries formatted-message full-prompt params loaded-chunk-ids loaded-docs]
      (let [start-time (System/currentTimeMillis)
            _ (prn (str "\n\n*** Starting RAG structured output chain, llm: " (env-var "OPENAI_API_MODEL_NAME") " full-prompt: \n\n"))
-          ;;  _ (prn full-prompt)
+           ;;  _ (prn full-prompt)
            chat-response
            (if use-azure-openai
              (openai/create-chat-completion
@@ -247,16 +690,14 @@
                :max_tokens nil}
               {:api-key (env-var "AZURE_OPENAI_API_KEY")
                :api-endpoint (env-var "AZURE_OPENAI_ENDPOINT")
-               :impl :azure
-               })
+               :impl :azure})
              (openai/create-chat-completion
               {:model (env-var "OPENAI_API_MODEL_NAME")
                :messages [{:role "system" :content "You are a helpful assistant."}
                           {:role "user" :content full-prompt}]
                :temperature 0.1
                :stream false
-               :max_tokens nil}
-              ))
+               :max_tokens nil}))
            end-time (System/currentTimeMillis)
            duration (- end-time start-time)
            _ (println (str "RAG query duration: " duration " ms"))
@@ -264,11 +705,11 @@
            english-answer (or assistant-reply "")
            translated-answer english-answer
            rag-success true
-                   ;; durations (assoc durations :rag_query (round (lap-timer start)))
+           ;; durations (assoc durations :rag_query (round (lap-timer start)))
            translation-enabled false
-                   ;; durations (assoc durations :translation (round (lap-timer start)))
-                   ;; durations (assoc durations :total (round (lap-timer total-start)))
-     
+           ;; durations (assoc durations :translation (round (lap-timer start)))
+           ;; durations (assoc durations :total (round (lap-timer total-start)))
+
            response {:conversation-id convo-id
                      :entity-id (:entity-id params)
                      :original_user_query (:original_user_query params)
@@ -281,22 +722,22 @@
                      :source_urls loaded-chunk-ids
                      :source_documents loaded-docs
                      :relevant_urls []
-                             ;; :not_loaded_urls not-loaded-urls
-                    ;;  :durations durations
+                     ;; :not_loaded_urls not-loaded-urls
+                     ;;  :durations durations
                      :prompts {:queryRelax (or (:promptRagQueryRelax params) "")
                                :generate (or (:promptRagGenerate params) "")
                                :fullPrompt full-prompt}}
-                        ;; Get one-line summary of original query
-           
-                        ;;
+           ;; Get one-line summary of original query
+
+           ;;
            ]
-                   ;;
-     
+       ;;
+
        response)))
 
-#?(:clj 
-   (defn simplify-convo-topic [!dh-conn params] 
-     (let [ summary-response
+#?(:clj
+   (defn simplify-convo-topic [!dh-conn params]
+     (let [summary-response
            (if use-azure-openai
              (openai/create-chat-completion
               {:model (env-var "AZURE_OPENAI_DEPLOYMENT_NAME")
@@ -309,9 +750,10 @@
               {:api-key (env-var "AZURE_OPENAI_API_KEY")
                :api-endpoint (env-var "AZURE_OPENAI_ENDPOINT")
                :impl :azure
-               :trace (fn [request response]
-                        #_(println "Request:" request)
-                        (println "Response:" response))})
+               ;; :trace (fn [request response]
+               ;;          #_(println "Request:" request)
+               ;;          (println "Response:" response))
+               })
              (openai/create-chat-completion
               {:model (env-var "OPENAI_API_MODEL_NAME")
                :messages [{:role "system"
@@ -319,13 +761,11 @@
                           {:role "user"
                            :content (str "<USER_QUERY>" (:original_user_query params) "</USER_QUERY>")}]
                :temperature 0.1
-               :max_tokens 30}
-              ))
+               :max_tokens 30}))
            _ (println (str "summary: ") summary-response)
            summary (-> summary-response :choices first :message :content)
            _ (println "Query summary:" summary)
-           _ (db/rename-convo-topic !dh-conn (:conversation-id params) summary)])
-     ))
+           _ (db/rename-convo-topic !dh-conn (:conversation-id params) summary)])))
 
 
 #?(:clj
@@ -338,10 +778,10 @@
            loaded-search-hits (atom [])
            doc-index (atom 0)
            docs-length (atom 0)]
-     ;; Make list of all markdown content
+       ;; Make list of all markdown content
        (while (< @doc-index (count retrieved-chunks))
          (let [search-hit (nth retrieved-chunks @doc-index)
-              ;;  _ (prn-str (str "search hit #" @doc-index ": ") search-hit)
+               ;;  _ (prn-str (str "search hit #" @doc-index ": ") search-hit)
                unique-chunk-id (:chunk_id search-hit)
                doc-md (:content_markdown search-hit)]
            (swap! doc-index inc)
@@ -352,13 +792,13 @@
                (swap! all-docs conj loaded-doc)
                (swap! all-chunk-ids conj unique-chunk-id)))))
 
-    ;; Rerank results using ColBERT
+       ;; Rerank results using ColBERT
        (let [rerank-url (env-var "COLBERT_API_URL")]
          (when (nil? rerank-url)
            (throw (ex-info (str "Environment variable 'COLBERT_API_URL' is invalid: '" rerank-url "'") {})))
          (let [rerank-data {:user_input (:translated_user_query params)
                             :documents (map
-                                      ;; #(subs (:content_markdown %) 0 (:maxSourceLength params))  
+                                        ;; #(subs (:content_markdown %) 0 (:maxSourceLength params))  
                                         (fn [doc]
                                           (let [content (:content_markdown doc)]
                                             (if (> (count content) (:maxSourceLength params))
@@ -366,18 +806,18 @@
                                               content)))
                                         retrieved-chunks)}
                rerank-data (json/write-str rerank-data)
-              ;;  _ (println (str "Rerank data: " rerank-data))
+               ;;  _ (println (str "Rerank data: " rerank-data))
                rerank-response (http/post rerank-url {:body rerank-data :content-type :json})
-              ;;  _ (println (str "Rerank response: " rerank-response))
+               ;;  _ (println (str "Rerank response: " rerank-response))
                rerank-response-body (json/read-str (:body rerank-response) :key-fn keyword)
                _ (when (empty? rerank-response-body)
                    (println "***  Warning: Rerank response was empty, falling back to original ranking ***"))
                search-hits-reranked (if (empty? rerank-response-body)
-                                    retrieved-chunks  ; fallback to original ranking
-                                    (map #(nth retrieved-chunks (:result_index %)) rerank-response-body))]
+                                      retrieved-chunks  ; fallback to original ranking
+                                      (map #(nth retrieved-chunks (:result_index %)) rerank-response-body))]
            #_(swap! durations assoc :colbert_rerank (round (lap-timer start)))
 
-          ;; Need to preserve order in chunks list
+           ;; Need to preserve order in chunks list
            (reset! doc-index 0)
            (while (and (< @doc-index (count search-hits-reranked))
                        (or (< @docs-length (:maxContextLength params))
@@ -419,15 +859,15 @@
 #?(:clj
    (defn rag-pipeline [params !dh-conn]
      (let [;;  _ (assoc params :durations  {:start (System/currentTimeMillis)
-          ;;                               :total 0
-          ;;                               :analyze 0
-          ;;                               :generate_searches 0
-          ;;                               :execute_searches 0
-          ;;                               :phrase_similarity_search 0
-          ;;                               :colbert_rerank 0
-          ;;                               :rag_query 0
-          ;;                               :translation 0}) 
-          ;;  _ (println "rag-pipeline input params: " params)
+           ;;                               :total 0
+           ;;                               :analyze 0
+           ;;                               :generate_searches 0
+           ;;                               :execute_searches 0
+           ;;                               :phrase_similarity_search 0
+           ;;                               :colbert_rerank 0
+           ;;                               :rag_query 0
+           ;;                               :translation 0}) 
+           ;;  _ (println "rag-pipeline input params: " params)
            convo-id (:conversation-id params)
            _ (println "starting to transact new msg thread...")
            _ (db/transact-new-msg-thread !dh-conn {:convo-id convo-id
@@ -444,10 +884,15 @@
            _ (println "starting to lookup search phrases...")
            search-phrase-hits (lookup-search-phrases-similar
                                (:phrasesCollectionName params)
+                               (:docsCollectionName params)
                                extract-search-queries
-                               (:phrase-gen-prompt params))
-           _ (println "done lookup search phrases.\n")
-          ;;  _ (println "first search-phrase-hit:" (first search-phrase-hits))
+                               (:phrase-gen-prompt params)
+                               (:filter-by params))
+           _ (println "done lookup search phrases, found count:" (count search-phrase-hits))
+           _ (when (empty? search-phrase-hits)
+               (reset! !response-states ["Ingen søkefraser funnet"])
+               (throw (ex-info "No search phrase found" {})))
+           ;;  _ (println "first search-phrase-hit:" (first search-phrase-hits))
 
            _ (println "starting to retrieve chunks...")
            retrieved-chunks (retrieve-chunks-by-id
@@ -455,7 +900,10 @@
                              (:chunksCollectionName params)
                              search-phrase-hits)
            _ (println "chunks retrieved count:" (count retrieved-chunks))
-          ;;  _ (println "retrieved chunks:" retrieved-chunks)
+           _ (when (empty? retrieved-chunks)
+               (reset! !response-states ["Ingen kilder funnet"])
+               (throw (ex-info "No sources found" {})))
+           ;;  _ (println "retrieved chunks:" retrieved-chunks)
 
            _ (println "starting to format retrieved chunks...")
            loaded-chunks (->> retrieved-chunks
@@ -466,7 +914,9 @@
                                     "\n<details>\n<summary> "
                                     (get-in doc [(keyword (:docsCollectionName params)) :title])
                                     " <a href=\""
-                                    (get-in doc [(keyword (:docsCollectionName params)) :source_document_url])
+                                    "https://kudos.dfo.no/documents/"
+                                    (get-in doc [:doc_num])
+                                    "/files/"
                                     "\" target=\"_blank\" title=\"Open source document\">&nbsp;&#8599;</a>\n"
                                     "</summary>\n"
                                     (when-not (nil? content-markdown)
@@ -478,7 +928,7 @@
 
            _ (println "starting to rerank chunks...")
            _ (reset! !response-states ["Sorterer rekkefølgen"])
-           {:keys [loaded-chunk-ids loaded-docs full-prompt]} (rerank-chunks retrieved-chunks params) 
+           {:keys [loaded-chunk-ids loaded-docs full-prompt]} (rerank-chunks retrieved-chunks params)
            _ (println "done reranking chunks.")
 
            _ (when (empty? loaded-docs)
@@ -506,7 +956,7 @@
            _ (simplify-convo-topic !dh-conn params)
            _ (println "done simplifying conversation topic.")]
        generation-result))
-       ;;
+   ;;
    )
 
 #?(:clj
@@ -552,7 +1002,7 @@
 
 #?(:clj
    (def kudos-entity-id "71e1adbe-2116-478d-92b8-40b10a612d7b"))
-#?(:clj 
+#?(:clj
    (def ai-guide-entity-id "7i8dadbe-0101-f0e1-92b8-40b10a61cdcd"))
 
 #?(:clj
@@ -577,8 +1027,8 @@
                          :stream_callback_msg1 nil
                          :stream_callback_msg2 nil
                          :streamCallbackFreqSec 2.0
-                         :maxResponseTokenCount nil}) 
-     
+                         :maxResponseTokenCount nil})
+
      (def kudos-rag-params {:conversation-id (nano-id)
                             :entity-id kudos-entity-id
                             :translated_user_query "DSB 2022"
@@ -587,6 +1037,10 @@
                             :promptRagQueryRelax "You have access to a search API that returns relevant documentation.\nYour task is to generate an array of up to 7 search queries that are relevant to this question. Use a variation of related keywords and synonyms for the queries, trying to be as general as possible.\nInclude as many queries as you can think of, including and excluding terms. For example, include queries like ['keyword_1 keyword_2', 'keyword_1', 'keyword_2']. Be creative. The more queries you include, the more likely you are to find relevant results.\n",
                             :promptRagGenerate "Use the following pieces of information to answer the user's question.\nIf you don't know the answer, just say that you don't know, don't try to make up an answer.\n\nContext: {context}\n\nQuestion: {question}\n\nOnly return the helpful answer below.\n\nHelpful answer:\n",
                             :phrase-gen-prompt "keyword-search"
+                            :filter {:type :typesense
+                                     :fields [{:type :multiselect
+                                               :selected-options #{"Tildelingsbrev"}
+                                               :field "type"}]}
                             :maxSourceDocCount 10
                             :maxContextLength 10000
                             :maxSourceLength 40000
@@ -596,11 +1050,11 @@
                             :stream_callback_msg1 nil
                             :stream_callback_msg2 nil
                             :streamCallbackFreqSec 2.0
-                            :maxResponseTokenCount nil}) 
-     
+                            :maxResponseTokenCount nil})
+
      (def rag-results (rag-pipeline kudos-rag-params conn))
 
-     (answer-followup-user-query conn (:conversation-id rag-results) "hvilke kriterie definerer høyrisiko?")
+     ;;  (answer-followup-user-query conn (:conversation-id rag-results) "hvilke kriterie definerer høyrisiko?")
 
      (defn get-newest-conversation-id
        "Retrieves the ID of the most recently created conversation."
@@ -625,34 +1079,32 @@
 
 
      ;; RAG stuff
-     
-     (def extract-search-queries (query-relaxation (:translated_user_query rag-params)
-                                                   (:promptRagQueryRelax rag-params)))
 
-     (prn "extract-search-queries" extract-search-queries)
-     
+
      (def convo-id (:conversation-id rag-params))
      (db/transact-new-msg-thread conn {:convo-id convo-id
                                        :user-query (:original_user_query rag-params)
                                        :entity-id (:entity-id rag-params)})
-     
+
      (def extract-search-queries (query-relaxation (:translated_user_query rag-params)
                                                    (:promptRagQueryRelax rag-params)))
-             ;; durations (assoc durations :generate_searches (- (System/currentTimeMillis) start))
-     
+     ;; durations (assoc durations :generate_searches (- (System/currentTimeMillis) start))
+
      (def search-phrase-hits (lookup-search-phrases-similar
                               (:phrasesCollectionName rag-params)
+                              (:docsCollectionName rag-params)
                               extract-search-queries
-                              (:phrase-gen-prompt rag-params)))
+                              (:phrase-gen-prompt rag-params)
+                              (:filter rag-params)))
      (def retrieved-chunks (retrieve-chunks-by-id
                             (:docsCollectionName rag-params)
                             (:chunksCollectionName rag-params)
                             search-phrase-hits))
-     
+
      (count retrieved-chunks)
-     
+
      (def reranked-results (rerank-chunks retrieved-chunks rag-params))
-     
+
      rag-params
 
      (def new-system-message

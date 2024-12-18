@@ -19,11 +19,11 @@
       :distributed {}}
  :chat {:all-entities-image "bot.svg"
         :entities [{:id "71e1adbe-2116-478d-92b8-40b10a612d7b"
-                    :name "Kunnskapsassistent - test"
+                    :name "Kunnskapsassistent - NEXT"
                     :image "kudos-logo.png"
-                    :docs-collection "TEST_kudos_docs"
-                    :chunks-collection "TEST_kudos_chunks"
-                    :phrases-collection "TEST_kudos_phrases"
+                    :docs-collection "NEXT_kudos_docs"
+                    :chunks-collection "NEXT_kudos_chunks"
+                    :phrases-collection "NEXT_kudos_phrases"
                     :phrase-gen-prompt "keyword-search"
                     :reasoning-languages ["en" "no"]
                     :prompt ""}]}}

@@ -1,0 +1,2 @@
+message - An item which takes up vertical space in a conversation, e.g
+          a user message or a filter.

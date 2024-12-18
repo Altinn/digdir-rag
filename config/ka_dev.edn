@@ -21,9 +21,9 @@
         :entities [{:id "71e1adbe-2116-478d-92b8-40b10a612d7b"
                     :name "Kunnskapsassistent - DEV"
                     :image "kudos-logo.png"
-                    :docs-collection "KUDOS_docs_2024-09-27" ;;_chunkr_test"
-                    :chunks-collection "KUDOS_chunks_2024-09-27" ;;_chunkr_test"
-                    :phrases-collection "KUDOS_phrases_2024-09-27" ;;_chunkr_test"
+                    :docs-collection "KUDOS_docs_2024-12-10" 
+                    :chunks-collection "KUDOS_chunks_2024-12-10" 
+                    :phrases-collection "KUDOS_phrases_2024-12-10" 
                     :phrase-gen-prompt "keyword-search"
                     :reasoning-languages ["en" "no"]
                     :prompt ""}]}}

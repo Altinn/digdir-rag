@@ -21,9 +21,9 @@
         :entities [{:id "03174558-327a-47a4-93e1-5812955243b6"
                     :name "Kunnskapsassistent"
                     :image "kudos-logo.png"
-                    :docs-collection "prod_kudos_docs"
-                    :chunks-collection "prod_kudos_chunks"
-                    :phrases-collection "prod_kudos_phrases"
+                    :docs-collection "PROD_kudos_docs"
+                    :chunks-collection "PROD_kudos_chunks"
+                    :phrases-collection "PROD_kudos_phrases"
                     :phrase-gen-prompt "keyword-search"
                     :reasoning-languages ["en" "no"]
                     :prompt ""}]}}

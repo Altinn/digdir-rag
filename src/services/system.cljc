@@ -11,10 +11,15 @@
    (defn answer-new-user-query-with-rag [{:keys [conversation-entity convo-id user-query] :as params}]
      #_(swap! !stream-msgs assoc-in [convo-id :streaming] true)
      (let [conn @delayed-connection
-         ;;   _ (prn "answer-new-user-query-with-rag is starting with params: " params)
            _ (reset! rag/!response-states ["Vurderer spørsmålet ditt"])
-         ;;   _ (prn "conversation-entity:" conversation-entity)
-           {:keys [id prompt image full-name name docs-collection chunks-collection phrases-collection phrase-gen-prompt]} conversation-entity
+           messages (vec (db/fetch-convo-messages-mapped @conn convo-id))
+
+           filter-by (-> (last messages) :message.filter/value)
+           
+
+           {:keys [id
+                   docs-collection chunks-collection
+                   phrases-collection phrase-gen-prompt]} conversation-entity
 
            rag-response (rag/rag-pipeline
                          {;; :on-next #(process-chunk convo-id %)
@@ -23,6 +28,7 @@
                           :translated_user_query user-query
                           :original_user_query user-query
                           :user_query_language_name "Norwegian"
+                          :filter-by filter-by
                           :promptRagQueryRelax "You have access to a search API that returns relevant documentation.\nYour task is to generate an array of up to 7 search queries that are relevant to this question. Use a variation of related keywords and synonyms for the queries, trying to be as general as possible.\nInclude as many queries as you can think of, including and excluding terms. For example, include queries like ['keyword_1 keyword_2', 'keyword_1', 'keyword_2']. Be creative. The more queries you include, the more likely you are to find relevant results.\n",
                           :promptRagGenerate "Use the following pieces of information to answer the user's question.\nIf you don't know the answer, just say that you don't know, don't try to make up an answer.\n\nContext: {context}\n\nQuestion: {question}\n\nOnly return the helpful answer below, using Markdown for improved readability.\n\nHelpful answer:\n",
                           :maxSourceDocCount 200
@@ -54,21 +60,17 @@
 
            ;; we send all completion-messages to the llm
            completion-messages (filter #(not= false (:message/completion %))
-                                       messages
-                                       ;; (concat messages new-messages)
-                                       )
+                                       messages)
            _ (prn "fetched" (count completion-messages) "completion-messages")
            _ (prn "Starting LLM call for followup query.")
-           ;; _ (swap! rag/!response-states conj "Starting LLM call for followup query")
+           _ (reset! rag/!response-states ["Skriver svar"])
            openai-messages (into []
                                  (mapv (fn [msg]
                                          {:role (name (:message/role msg))
                                           :content (:message/text msg)})
-                                       completion-messages))
-              ;;  _ (prn "openai-messages:" openai-messages)
+                                       completion-messages)) 
            chat-response (openai/create-chat-completion openai-messages)
            _ (prn "chat-response completed. response:" chat-response)
-           ;; _ (reset! rag/!response-states [])
            assistant-reply (:content (:message (first (:choices chat-response))))
            _ (db/transact-assistant-msg conn convo-id assistant-reply)
            _ (reset! rag/!response-states [])]
@@ -90,7 +92,11 @@
                             :followup (answer-followup-user-query (:msg-data job))
                             :new (answer-new-user-query-with-rag (:msg-data job)))
                           (catch Exception e
-                            (println "Error processing job:" e))))))))))
+                            (println "Error processing job:" e))
+                          (finally
+                            (future
+                              (Thread/sleep 7000)
+                              (reset! rag/!response-states nil)))))))))))
 
 ;; Initialize the job processor when the namespace is loaded
 #?(:clj (start-job-processor!))

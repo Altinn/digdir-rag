@@ -4,20 +4,21 @@
             [chat-app.rhizome :as rhizome]
             [services.openai :as openai]
             #?(:clj [services.system :as system]) 
-            #?(:clj [models.db :refer [;conn
-                                       delayed-connection
-                                       fetch-convo-messages-mapped
-                                       fetch-convo-entity-id
-                                       fetch-user-id
-                                       conversations
-                                       create-folder
-                                       folders
-                                       rename-convo-topic
-                                       rename-folder
-                                       delete-convo
-                                       delete-folder
-                                       clear-all-conversations
-                                       conversations-in-folder]])
+            #?(:clj [models.db
+                     :refer [delayed-connection
+                             fetch-convo-messages-mapped
+                             fetch-convo-entity-id
+                             fetch-user-id
+                             conversations
+                             create-folder
+                             folders
+                             rename-convo-topic
+                             rename-folder
+                             delete-convo
+                             delete-folder
+                             clear-all-conversations
+                             conversations-in-folder]
+                     :as db])
             #?(:clj [chat-app.rag :as rag])
             #?(:clj [chat-app.auth :as auth])
             [chat-app.webauthn :as webauthn]
@@ -32,6 +33,20 @@
             [clojure.string :as str]
             [markdown.core :as md2]))
 
+(defn T
+  "For debugging
+  Input → ___ → Output
+           |
+           |
+           ↓
+        Console"
+  ([x]
+   (prn x)
+   x)
+  ([tag x]
+   (prn tag x)
+   x))
+
 #?(:clj (defonce conn @delayed-connection))
 
 (e/def config-filename (e/server (System/getenv "ENTITY_CONFIG_FILE")))
@@ -43,7 +58,9 @@
 (e/def auth-conn)
 
 
-#?(:cljs (defonce !view-main (atom :entity-selection)))
+
+#?(:cljs (defonce !state (atom {:route nil})))
+#?(:cljs (defonce !view-main (atom :home)))
 #?(:cljs (defonce !conversation-entity (atom nil)))
 #?(:cljs (defonce !view-main-prev (atom nil)))
 #?(:cljs (defonce !edit-folder (atom nil)))
@@ -70,7 +87,7 @@
       (e/server (e/offload #(conversations db search-text))))))
 
 
-(e/defn HandleChatMsg [user-query]
+(e/defn HandleChatMsg [user-query last-message-is-filter?]
   (e/client
    (let [current-convo-id (e/watch !active-conversation)
          conversation-entity (e/watch !conversation-entity)
@@ -87,8 +104,8 @@
                            :conversation-entity conversation-entity}
             msg-data (if current-convo-id
                        (assoc base-msg-data :convo-id current-convo-id)
-                       (assoc base-msg-data :convo-id new-convo-id-srv :new-convo? true))
-            job-data {:type (if current-convo-id :followup :new)
+                       (assoc base-msg-data :convo-id new-convo-id-srv :new-convo? true)) 
+            job-data {:type (if last-message-is-filter? :new :followup)
                       :msg-data msg-data}]
 
          ;; Enqueue the job instead of running it immediately
@@ -109,13 +126,13 @@
     (let [!input-node (atom nil)
           wait? (e/server (e/watch !wait?))
           conversation-entity (e/watch !conversation-entity)]
-      (dom/div (dom/props {:class (str (if (rhizome/mobile-device?) "bottom-8" "bottom-0") " absolute left-0 w-full border-transparent bg-gradient-to-b from-transparent via-white to-white pt-6 dark:border-white/20 dark:via-[#343541] dark:to-[#343541] md:pt-2")})
+      (dom/div (dom/props {:class (str (if (rhizome/mobile-device?) "bottom-8" "bottom-0") " absolute left-0 w-full border-transparent bg-gradient-to-b from-transparent via-white to-white pt-6 md:pt-2")})
         (dom/div (dom/props {:class "stretch mx-2 mt-4 flex flex-row gap-3 last:mb-2 md:mx-4 md:mt-[52px] md:last:mb-6 lg:mx-auto lg:max-w-3xl"})
           (dom/div (dom/props {:class "flex flex-col w-full gap-2"})
-            (dom/div (dom/props {:class "relative flex w-full flex-grow flex-col rounded-md border border-black/10 bg-white shadow-[0_0_10px_rgba(0,0,0,0.10)] dark:border-gray-900/50 dark:bg-[#40414F] dark:text-white dark:shadow-[0_0_15px_rgba(0,0,0,0.10)] sm:mx-4"})
+            (dom/div (dom/props {:class "relative flex w-full flex-grow flex-col rounded-md border border-black/10 bg-white shadow-[0_0_10px_rgba(0,0,0,0.10)] sm:mx-4"})
               (dom/textarea
                (dom/props {:id "prompt-input"
-                           :class "sm:h-11 m-0 w-full resize-none border-0 bg-transparent p-0 py-2 pr-8 pl-10 text-black dark:bg-transparent dark:text-white md:py-3 md:pl-10"
+                           :class "sm:h-11 m-0 w-full resize-none border-0 bg-transparent p-0 py-2 pr-8 pl-10 text-black md:py-3 md:pl-10"
                            :placeholder (str "Hva kan jeg hjelpe deg med?")
                            :value ""
                            :disabled wait?})
@@ -127,12 +144,13 @@
                            (.preventDefault e)
                            (when-some [v (not-empty (.. e -target -value))]
                              (when-not (str/blank? v)
-                               (HandleChatMsg. v)))
+                               (HandleChatMsg. v
+                                               (-> (last messages) :message.filter/value boolean))))
                            (set! (.-value @!input-node) "")))))
               (let [wait? (e/server (e/watch !wait?))]
                 (ui/button (e/fn [] (set! (.-value @!input-node) ""))
                   (dom/props {:title (when wait? "Functionality not implemented") ;TODO: implement functionality to stop process
-                              :class "absolute right-2 top-2 rounded-sm p-1 text-neutral-800 opacity-60 hover:bg-neutral-200 hover:text-neutral-900 dark:bg-opacity-50 dark:text-neutral-100 dark:hover:text-neutral-200"}) 
+                              :class "absolute right-2 top-2 rounded-sm p-1 text-neutral-800 opacity-60 hover:bg-neutral-200 hover:text-neutral-900"}) 
                   (if-not wait?
                     (dom/img (dom/props {:src "icons/old/send.svg"}))
                     (dom/img (dom/props {:src "icons/circle-stop.svg"}))))))))))))
@@ -185,7 +203,7 @@
   (e/client
     (dom/div (dom/props {:class "flex w-full flex-col items-start"})
       (let [msg-hovered? (dom/Hovered?.)]
-        (dom/div (dom/props {:class "relative max-w-[70%] rounded-3xl bg-[#b8e9f8] px-5 py-2.5 dark:bg-token-main-surface-secondary"})
+        (dom/div (dom/props {:class "relative max-w-[70%] rounded-3xl bg-[#b8e9f8] px-5 py-2.5"})
          ;; disabling edit button for now, should make it configurable                  
                  #_(ui/button (e/fn [])
                               (dom/props {:class (str "absolute -left-12 top-1 hover:bg-[#f4f4f4] rounded-full flex justify-center items-center w-8 h-8"
@@ -196,7 +214,88 @@
                               (dom/img (dom/props {:class "w-4" :src "icons/pencil.svg"})))
                  (dom/p (dom/text msg)))))))
 
-(e/defn RenderMsg [msg-map]
+
+
+(defn typesense-field->ui-name [field]
+  ({"type" "dokumenttyper" 
+    "orgs_short" "organisasjoner"
+    "orgs_long" "organisasjoner"
+    "owner_short" "eiere"
+    "owner_long" "eiere"
+    "publisher_short" "utgivere"
+    "publisher_long" "utgivere"
+    "recipient_short" "mottakere"
+    "recipient_long" "mottakere"
+    "source_published_year" "år publisert"} field field))
+
+
+(e/defn FilterField [{:as x :keys [expanded? options field]} ToggleOption ToggleFieldExpanded? enabled?]
+  (e/client
+   (dom/div ;; NB: this extra div is required, otherwise the card
+            ;;     will stretch to the bottom of the parent
+            ;;     regardless of content height.
+    (dom/div
+     (dom/props {:class (str "mb-4 space-y-2 p-4 rounded-md shadow-md border " (if enabled? "bg-white" "bg-gray-300"))})
+     (dom/div
+      (dom/div
+       (dom/props {:class "font-medium text-gray-800 mb-2"})
+       (dom/text (str "Velg " (typesense-field->ui-name field))))
+
+      (ui/button ToggleFieldExpanded?
+                 (dom/props {:class "px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none"})
+                 (dom/text (str (count (filter :selected? options)) " valgt")))
+      (when expanded?
+        (dom/div
+         (dom/props {:class "flex flex-col items-start space-y-2 mt-1 max-h-48 overflow-y-scroll"})
+         (e/for [{:keys [selected? count value]} options]
+           (ui/button (e/fn [] (ToggleOption. value))
+                      (dom/span
+                       (dom/props {:class "grid grid-cols-[16px_1fr_auto] items-center gap-2 w-full text-left p-2 hover:bg-gray-100 rounded-md"})
+                       (dom/img (dom/props {:class "w-[16px] h-[16px] flex-shrink-0"
+                                            :src (if selected?
+                                                   "icons/checked_checkbox.svg"
+                                                   "icons/unchecked_checkbox.svg")}))
+                       (dom/span
+                        (dom/props {:class "text-gray-800 whitespace-wrap"})
+                        (dom/text value))
+                       (dom/span
+                        (dom/props {:class "text-gray-600 text-right"})
+                        (dom/text (str "(" count ")")))))))))))))
+
+
+
+(defn toggle [s k]
+  (if (s k)
+    (disj s k)
+    (conj s k)))
+
+(e/defn FilterMsg [msg enabled?]
+  (e/client
+   (let [mfilter (:message.filter/value msg)]
+     (e/for [[idx field] (map vector (range) (mfilter :ui/fields))]
+       (FilterField. field
+                     (e/fn ToggleOption [option]
+                       (if-not enabled?
+                         (e/client
+                          (js/alert "Filteret kan ikke endres etter oppfølgningspørsmål er sendt"))
+                         (e/server
+                          (e/offload
+                           #(db/set-message-filter
+                             db/conn
+                             (:db/id msg)
+                             (-> (update-in mfilter [:fields idx :selected-options] toggle option)
+                                 (dissoc :ui/fields)))))))
+                     (e/fn ToggleFieldExpanded? []
+                       (e/server
+                        (e/offload
+                         #(db/set-message-filter
+                           db/conn
+                           (:db/id msg)
+                           (-> (update-in mfilter [:fields idx :expanded?] not)
+                               (dissoc :ui/fields))))))
+                     enabled?)))))
+
+(e/defn RenderMsg [msg-map last?]
   (e/client
    (let [{:message/keys [created id text role kind voice]} msg-map
          _ (prn "message id" id "voice:" voice " kind: " kind)]
@@ -206,70 +305,27 @@
                (case voice
                  :user (UserMsg. text)
                  :assistant  (BotMsg. msg-map)
+                 :filter (FilterMsg. msg-map last?)
                  :agent (dom/div (dom/text))
-                 :system (dom/div (dom/props {:class "group md:px-4 border-b border-black/10 bg-white text-gray-800 dark:border-gray-900/50 dark:bg-[#343541] dark:text-gray-100"})
+                 :system (dom/div (dom/props {:class "group md:px-4 border-b border-black/10 bg-white text-gray-800"})
                                   (dom/div (dom/props {:class "relative m-auto flex p-4 text-base md:max-w-2xl md:gap-6 md:py-6 lg:max-w-2xl lg:px-0 xl:max-w-3xl"})
                                            #_(dom/div (dom/props {:class "min-w-[40px] text-right font-bold"})
                                                       (set! (.-innerHTML dom/node) bot-icon))
-                                           (dom/div (dom/props {:class "prose whitespace-pre-wrap dark:prose-invert flex-1"})
+                                           (dom/div (dom/props {:class "prose whitespace-pre-wrap flex-1"})
                                                     (set! (.-innerHTML dom/node) (md2/md->html text)))
                                            #_(dom/div (dom/props {:class "md:-mr-8 ml-1 md:ml-0 flex flex-col md:flex-row gap-4 md:gap-1 items-center md:items-start justify-end md:justify-start"})
                                                       (dom/button (dom/props {:class "invisible group-hover:visible focus:visible text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"})
-                                                                  (set! (.-innerHTML dom/node) delete-icon)))))))))))
 
-(e/defn PreConversation []
-  (e/client
-   (let [conversation-entity (e/watch !conversation-entity)
-         {:keys [prompt image pre-conversation-content]} conversation-entity]
-     (dom/div
-      (dom/div
-       (dom/props {:class "h-[calc(100vh-10rem)] w-full flex flex-col"})
-       (dom/div
-        (dom/props {:class "mt-auto flex flex-col items-center mx-auto max-w-3xl px-4 "})
-      
-              ;; zero state
-        (dom/div
-         (dom/props {:class "flex flex-col items-center mx-auto max-w-3xl px-4"})
-         (dom/div
-          (dom/props {:class "w-full max-w-[600px]"})
-          (dom/div
-           (dom/h2
-            (dom/props {:class "text-2xl font-bold"})
-            (dom/text "Presis og pålitelig innsikt,"))
-           (dom/h2
-            (dom/props {:class "text-2xl font-bold"})
-            (dom/text "skreddersydd for deg.")))
-      
-          (dom/p
-           (dom/text "Skriv stikkord om hva du leter etter:"))
-      
-          (dom/ul
-           (dom/props {:class "list-disc px-4"})
-           (dom/li
-            (dom/text "Type dokumenter (tildelingsbrev, årsrapport)"))
-           (dom/li
-            (dom/text "Årstasll"))
-           (dom/li
-            (dom/text "Bransje eller sektor (f.eks teknologi, offentlig sektor)"))
-           (dom/li
-            (dom/text "Tema (bærekraft, likestilling, innovasjon)")))))))
+                                                                  (set! (.-innerHTML dom/node) delete-icon)))))
+                 ))))))
 
-      ;;
-      (PromptInput. {:convo-id (nano-id)})))))
 
-  (defn T
-    "For debugging
-  Input → ___ → Output
-           |
-           |
-           ↓
-        Console"
-    ([x]
-     (prn x)
-     x)
-    ([tag x]
-     (prn tag x)
-     x))
+
+
+
+
+
+
 
 (e/defn ResponseState [state]
   (e/client (dom/div (dom/props {:class "w-full"})
@@ -287,34 +343,32 @@
   (e/client
    (let [convo-id (e/watch !active-conversation)
          conversation-entity (e/watch !conversation-entity)
-         [entity-id] (when convo-id
-                       (e/server
-                        (e/offload #(fetch-convo-entity-id db convo-id))))
-         messages (e/server (e/offload #(fetch-convo-messages-mapped db convo-id)))
-         entity (first (filter #(= (:id %) entity-id) (:entities entities-cfg)))
-         _ (when (not= entity conversation-entity)
-             (reset! !conversation-entity entity))
          {:keys [prompt image full-name name]} conversation-entity
          response-states (e/server (e/watch rag/!response-states))]
-     (dom/div
-      (dom/props {:class "flex flex-col stretch justify-center items-center h-full lg:max-w-3xl mx-auto gap-4"})
-      (dom/div (dom/props {:class "flex flex-col gap-8 items-center"})
+     (when
+      (and (some? convo-id)
+           (some? conversation-entity)
+           (let [messages (e/server (e/offload #(rag/prepare-conversation db convo-id conversation-entity)))]
+             (dom/div
+              (dom/props {:class "flex flex-col stretch justify-center items-center h-full lg:max-w-3xl mx-auto gap-4"})
+              (dom/div (dom/props {:class "flex flex-col gap-8 items-center"})
 
-               #_(dom/img (dom/props {:class "w-48 mx-auto rounded-full"
-                                    :src image}))
-               (dom/h1 (dom/props {:class "text-2xl"}) (dom/text (or full-name name))))
-      (when messages ;todo: check if this is still needed
-        (e/for [msg messages]
-          (RenderMsg. msg))
-        (when-let [rs (first response-states)] (ResponseState. rs)))
+                       #_(dom/img (dom/props {:class "w-48 mx-auto rounded-full"
+                                              :src image}))
+                       (dom/h1 (dom/props {:class "text-2xl"}) (dom/text (or full-name name))))
+              (when messages ;todo: check if this is still needed
+                (e/for [msg (butlast messages)]
+                  (RenderMsg. msg false))
+                (RenderMsg. (last messages) true)
+                (when-let [rs (first response-states)] (ResponseState. rs)))
 
-      (let [stream-msgs (e/server (e/watch !stream-msgs))]
-        (when (:streaming (get stream-msgs convo-id))
-          (when-let [content (:content (get stream-msgs convo-id))]
-            (BotMsg. content))))
+              (let [stream-msgs (e/server (e/watch !stream-msgs))]
+                (when (:streaming (get stream-msgs convo-id))
+                  (when-let [content (:content (get stream-msgs convo-id))]
+                    (BotMsg. content))))
 
-      (PromptInput. {:convo-id convo-id
-                     :messages messages})))))
+              (PromptInput. {:convo-id convo-id
+                             :messages messages}))))))))
 
 (e/defn ConversationList [conversations]
   (e/client
@@ -322,22 +376,27 @@
           inside-folder? (e/watch inside-folder-atom?)
           !edit-conversation (atom false)
           edit-conversation (e/watch !edit-conversation)
-          active-conversation (e/watch !active-conversation)]
+          active-conversation (e/watch !active-conversation)
+          conversation-entity (e/watch !conversation-entity)]
       (dom/div (dom/props {:class "pt-2 flex-grow"}) 
         (dom/div (dom/props {:class (str (when-not inside-folder? "gap-1 ") "flex w-full flex-col")})
-          (e/for [[created eid convo-id topic folder-name] conversations]
+          (e/for [[created eid convo-id topic entity-id folder-name] conversations]
             (when folder-name (reset! inside-folder-atom? folder-name))
             (let [editing? (= convo-id (:convo-id edit-conversation))]
               (dom/div (when folder-name (dom/props {:class "ml-5 gap-2 border-l pl-2"}))
                 (dom/div (dom/props {:class "relative flex items-center"})
                   (if-not (and editing? (= :edit (:action edit-conversation)))
-                    (dom/button (dom/props {:class (str (when (= active-conversation convo-id) "bg-slate-200 ") "flex w-full cursor-pointer items-center gap-3 rounded-lg p-3 text-sm transition-colors duration-200 ")
-                                            :draggable true})
-                      (dom/on "click" (e/fn [_]
-                                        (reset! !active-conversation convo-id)
-                                        (reset! !view-main :conversation))) 
-                      (dom/div (dom/props {:class "relative max-h-5 flex-1 overflow-hidden text-ellipsis whitespace-nowrap break-all text-left text-[12.5px] leading-3 pr-1"})
-                        (dom/text topic)))
+                    (dom/button
+                     (dom/props {:class (str (when (= active-conversation convo-id) "bg-slate-200 ") "flex w-full cursor-pointer items-center gap-3 rounded-lg p-3 text-sm transition-colors duration-200 ")
+                                 :draggable true})
+                     (dom/on "click" (e/fn [_]
+                                       (let [entity (first (filter #(= (:id %) entity-id) (:entities entities-cfg)))]
+                                         (when (not= entity conversation-entity) 
+                                           (reset! !conversation-entity entity)))
+                                       (reset! !active-conversation convo-id)
+                                       (reset! !view-main :conversation)))
+                     (dom/div (dom/props {:class "relative max-h-5 flex-1 overflow-hidden text-ellipsis whitespace-nowrap break-all text-left text-[12.5px] leading-3 pr-1"})
+                              (dom/text topic)))
                     (dom/div (dom/props {:class "flex w-full items-center gap-3 rounded-lg bg-[#343541]/90 p-3"})
                       (dom/input (dom/props {:class "mr-12 flex-1 overflow-hidden overflow-ellipsis border-neutral-400 bg-transparent text-left text-[12.5px] leading-3 text-white outline-none focus:border-neutral-100"
                                              :value topic})
@@ -529,6 +588,27 @@
                 (dom/text "Create passkey")))))))
 
 
+(e/defn NewThread []
+  (e/server
+   (println "transacting...")
+   (let [entity-id (-> entities-cfg
+                       :entities
+                       first
+                       :id)
+         new-convo-id 
+         (e/offload #(db/transact-new-msg-thread2 db/conn
+                                                  (-> entities-cfg
+                                                      :entities
+                                                      first
+                                                      :id)))]
+     (println "New thread : " new-convo-id)
+     (e/client 
+      (let [entity (first (filter #(= (:id %) entity-id) (:entities entities-cfg)))] 
+        (reset! !conversation-entity entity))
+      (reset! !view-main :conversation)
+      (reset! !active-conversation (:conversation-id new-convo-id)))
+     new-convo-id))) 
+
 (e/defn LeftSidebar []
   (e/client
     (when (e/watch !sidebar?)
@@ -552,10 +632,7 @@
           (let [local-btn-style "flex items-center gap-4 py-2 px-4 w-full rounded hover:bg-slate-300"
                 entity (first (:entities entities-cfg))]
             (ui/button
-             (e/fn []
-               (reset! !active-conversation nil)
-               (reset! !view-main :pre-conversation)
-               (reset! !conversation-entity entity))
+             NewThread
              (dom/props {:class local-btn-style})
              (dom/div
               (dom/props {:class "bg-gray-300 text-black text-sm font-bold px-2.5 py-0.5 rounded flex items-center gap-2"})
@@ -732,14 +809,79 @@
                                                   nil)))
                                (dom/text "Remove"))))))))
 
+(e/defn Home []
+  (e/client
+   (dom/div
+    (dom/props {:class "h-[calc(100vh-10rem)] w-full flex flex-col justify-center items-center"})
+    (dom/div
+     (dom/props {:class "flex flex-col items-center mx-auto max-w-3xl px-4"})
+
+     (dom/div
+      (dom/props {:class "w-full max-w-[600px]"})
+
+      ;; Title
+      (dom/div
+       (dom/h2
+        (dom/props {:class "text-2xl font-bold text-center"})
+        (dom/text "Presis og pålitelig innsikt,"))
+       (dom/h2
+        (dom/props {:class "text-2xl font-bold text-center"})
+        (dom/text "skreddersydd for deg.")))
+
+      ;; Subtitle
+      (dom/p
+       (dom/props {:class "text-center"})
+       (dom/text "Skriv stikkord om hva du leter etter:"))
+
+      ;; List
+      (dom/ul
+       (dom/props {:class "list-disc px-4 text-left"})
+       (dom/li (dom/text "Type dokumenter (tildelingsbrev, årsrapport)"))
+       (dom/li (dom/text "Årstall"))
+       (dom/li (dom/text "Bransje eller sektor (f.eks teknologi, offentlig sektor)"))
+       (dom/li (dom/text "Tema (bærekraft, likestilling, innovasjon)")))
+      
+      )))
+
+   #_(dom/div
+      (dom/props {:class "h-[calc(100vh-10rem)] w-full flex flex-col"})
+      (dom/div
+       (dom/props {:class "mt-auto flex flex-col items-center mx-auto max-w-3xl px-4 "})
+
+       (dom/div
+        (dom/props {:class "flex flex-col items-center mx-auto max-w-3xl px-4"})
+        (dom/div
+         (dom/props {:class "w-full max-w-[600px]"})
+         (dom/div
+          (dom/h2
+           (dom/props {:class "text-2xl font-bold"})
+           (dom/text "Presis og pålitelig innsikt,"))
+          (dom/h2
+           (dom/props {:class "text-2xl font-bold"})
+           (dom/text "skreddersydd for deg.")))
+
+         (dom/p
+          (dom/text "Skriv stikkord om hva du leter etter:"))
+
+         (dom/ul
+          (dom/props {:class "list-disc px-4"})
+          (dom/li
+           (dom/text "Type dokumenter (tildelingsbrev, årsrapport)"))
+          (dom/li
+           (dom/text "Årstall"))
+          (dom/li
+           (dom/text "Bransje eller sektor (f.eks teknologi, offentlig sektor)"))
+          (dom/li
+           (dom/text "Tema (bærekraft, likestilling, innovasjon)")))))))))
+
+
 (e/defn MainView []
   (e/client
     (dom/div (dom/props {:class "flex flex-1 h-full w-full"})
-      (dom/div (dom/props {:class "relative flex-1 overflow-hidden pb-[100px]"})
+      (dom/div (dom/props {:class "relative flex-1 overflow-hidden pb-[120px]"})
         (dom/div (dom/props {:class "max-h-full overflow-x-hidden"})
           (case (e/watch !view-main)
-            :entity-selection (EntitySelector.)
-            :pre-conversation (PreConversation.)
+            :home (Home.)
             :conversation (Conversation.)
             :dashboard (AuthAdminDashboard.))
           (when (e/watch debug/!debug?) 
