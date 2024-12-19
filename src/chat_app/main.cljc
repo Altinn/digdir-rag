@@ -148,12 +148,18 @@
                                                (-> (last messages) :message.filter/value boolean))))
                            (set! (.-value @!input-node) "")))))
               (let [wait? (e/server (e/watch !wait?))]
-                (ui/button (e/fn [] (set! (.-value @!input-node) ""))
-                  (dom/props {:title (when wait? "Functionality not implemented") ;TODO: implement functionality to stop process
-                              :class "absolute right-2 top-2 rounded-sm p-1 text-neutral-800 opacity-60 hover:bg-neutral-200 hover:text-neutral-900"}) 
-                  (if-not wait?
-                    (dom/img (dom/props {:src "icons/old/send.svg"}))
-                    (dom/img (dom/props {:src "icons/circle-stop.svg"}))))))))))))
+                (ui/button
+                 (e/fn []
+                   (when-some [v (not-empty (.-value @!input-node))]
+                     (when-not (str/blank? v)
+                       (HandleChatMsg. v
+                                       (-> (last messages) :message.filter/value boolean))))
+                   (set! (.-value @!input-node) ""))
+                 (dom/props {:title (when wait? "Functionality not implemented") ;TODO: implement functionality to stop process
+                             :class "absolute right-2 top-2 rounded-sm p-1 text-neutral-800 opacity-60 hover:bg-neutral-200 hover:text-neutral-900"})
+                 (if-not wait?
+                   (dom/img (dom/props {:src "icons/old/send.svg"}))
+                   (dom/img (dom/props {:src "icons/circle-stop.svg"}))))))))))))
 
 (e/defn BotMsg [msg-map]
   (e/client
@@ -339,36 +345,75 @@
                                    (dom/div (dom/props {:class "prose whitespace-pre-wrap px-4 pt-1 max-w-[600px]"}) 
                                             (dom/text state)))))))))
 
+
+#?(:cljs (defn observe-resize [node callback]
+           (let [observed-element node
+                 resize-observer (js/ResizeObserver.
+                                  (fn [entries]
+                                    (doseq [entry entries]
+                                      (let [content-rect (.-contentRect entry)
+                                            rect (.getBoundingClientRect (.-target entry))
+                                            y (.-y rect)
+                                            width (.-width content-rect)
+                                            height (.-height content-rect)]
+                                        (println "Resized" width height y)
+                                        (.call callback nil)))))]
+             (.observe resize-observer observed-element))))
+
 (e/defn Conversation []
   (e/client
    (let [convo-id (e/watch !active-conversation)
          conversation-entity (e/watch !conversation-entity)
          {:keys [prompt image full-name name]} conversation-entity
-         response-states (e/server (e/watch rag/!response-states))]
-     (when
-      (and (some? convo-id)
-           (some? conversation-entity)
-           (let [messages (e/server (e/offload #(rag/prepare-conversation db convo-id conversation-entity)))]
-             (dom/div
-              (dom/props {:class "flex flex-col stretch justify-center items-center h-full lg:max-w-3xl mx-auto gap-4"})
-              (dom/div (dom/props {:class "flex flex-col gap-8 items-center"})
+         response-states (e/server (e/watch rag/!response-states))
+         !chat-container (atom nil)
+         !is-at-bottom (atom false)
+         scroll-to-bottom (fn []
+                            (when-let [container @!chat-container]
+                              (when @!is-at-bottom
+                                (println "Scrolling to bottom")
+                                (set! (.-scrollTop container) (.-scrollHeight container)))))]
+     (dom/div
+      (dom/props {:class "max-h-full overflow-x-hidden"})
+      (reset! !chat-container dom/node)
+      (dom/on "scroll" (e/fn [e]
+                         (let [target (.-target e)
+                               scroll-bottom (+ (.-scrollTop target) (.-clientHeight target))
+                               scroll-height (.-scrollHeight target)
+                               at-bottom (<= (- scroll-height scroll-bottom) 1.0)]
+                           (println "Scrolling, at bottom?" at-bottom "scroll values - bottom:" scroll-bottom "height:" scroll-height "diff:" (- scroll-height scroll-bottom))
+                           (reset! !is-at-bottom at-bottom))))
 
-                       #_(dom/img (dom/props {:class "w-48 mx-auto rounded-full"
-                                              :src image}))
-                       (dom/h1 (dom/props {:class "text-2xl"}) (dom/text (or full-name name))))
-              (when messages ;todo: check if this is still needed
-                (e/for [msg (butlast messages)]
-                  (RenderMsg. msg false))
-                (RenderMsg. (last messages) true)
-                (when-let [rs (first response-states)] (ResponseState. rs)))
+      (when
+       (and (some? convo-id)
+            (some? conversation-entity)
+            (let [messages (e/server (e/offload #(rag/prepare-conversation db convo-id conversation-entity)))]
+              (dom/div
+               (dom/props {:class "max-h-full overflow-x-hidden"})
+               (observe-resize dom/node scroll-to-bottom)
 
-              (let [stream-msgs (e/server (e/watch !stream-msgs))]
-                (when (:streaming (get stream-msgs convo-id))
-                  (when-let [content (:content (get stream-msgs convo-id))]
-                    (BotMsg. content))))
+               (dom/div
+                (dom/props {:class "flex flex-col stretch justify-center items-center h-full lg:max-w-3xl mx-auto gap-4"})
 
-              (PromptInput. {:convo-id convo-id
-                             :messages messages}))))))))
+                (dom/div (dom/props {:class "flex flex-col gap-8 items-center"})
+
+                         #_(dom/img (dom/props {:class "w-48 mx-auto rounded-full"
+                                                :src image}))
+                         (dom/h1 (dom/props {:class "text-2xl"}) (dom/text (or full-name name))))
+                (when messages ;todo: check if this is still needed
+                  (e/for [msg (butlast messages)]
+                    (RenderMsg. msg false))
+                  (RenderMsg. (last messages) true)
+                  (when-let [rs (first response-states)] (ResponseState. rs)))
+
+                (let [stream-msgs (e/server (e/watch !stream-msgs))]
+                  (when (:streaming (get stream-msgs convo-id))
+                    (when-let [content (:content (get stream-msgs convo-id))]
+                      (BotMsg. content))))
+
+                (PromptInput. {:convo-id convo-id
+                               :messages messages}))))))))))
+
 
 (e/defn ConversationList [conversations]
   (e/client
@@ -704,144 +749,146 @@
 
 (e/defn AuthAdminDashboard []
   (e/client
-   (dom/div
-    (dom/props {:class "p-8 flex flex-col gap-4"})
-    (let [token (e/client (get-from-local-storage "auth-token"))]
-      (dom/div
-       (dom/p (dom/text "Local storage JWT: " token))
-       (dom/p (dom/text "Local storage JWT unsigned: " (e/server (auth/verify-token token))))
-       (let [http-cookie-jwt (e/server (get-in e/http-request [:cookies "auth-token" :value]))]
-         (dom/p
-          (dom/text
-           "created-by: "
-           (e/server
-            (let [user-email (:user-id (auth/verify-token
-                                        (get-in e/http-request [:cookies "auth-token" :value])))]
-              (e/offload #(fetch-user-id db user-email))))))
-         (dom/p (dom/text "HTTP Only cookie: " http-cookie-jwt))
-         (let [cookie (e/server (auth/verify-token http-cookie-jwt))
-               jwt-expiry (:expiry cookie)]
-           (dom/p (dom/text "HTTP Only cookie: " cookie))
-           (dom/p (dom/text "HTTP Only cookie user: " (:user-id cookie)))
-           (dom/p (dom/text "HTTP Only cookie expiry: " jwt-expiry))
-           #_(dom/p (dom/text "HTTP Only cookie expiry intant: " (t/instant jwt-expiry)))
+   (dom/div 
+    (dom/props {:class "max-h-full overflow-x-hidden"}) 
+    (dom/div
+     (dom/props {:class "p-8 flex flex-col gap-4"})
+     (let [token (e/client (get-from-local-storage "auth-token"))]
+       (dom/div
+        (dom/p (dom/text "Local storage JWT: " token))
+        (dom/p (dom/text "Local storage JWT unsigned: " (e/server (auth/verify-token token))))
+        (let [http-cookie-jwt (e/server (get-in e/http-request [:cookies "auth-token" :value]))]
+          (dom/p
+           (dom/text
+            "created-by: "
+            (e/server
+             (let [user-email (:user-id (auth/verify-token
+                                         (get-in e/http-request [:cookies "auth-token" :value])))]
+               (e/offload #(fetch-user-id db user-email))))))
+          (dom/p (dom/text "HTTP Only cookie: " http-cookie-jwt))
+          (let [cookie (e/server (auth/verify-token http-cookie-jwt))
+                jwt-expiry (:expiry cookie)]
+            (dom/p (dom/text "HTTP Only cookie: " cookie))
+            (dom/p (dom/text "HTTP Only cookie user: " (:user-id cookie)))
+            (dom/p (dom/text "HTTP Only cookie expiry: " jwt-expiry))
+            #_(dom/p (dom/text "HTTP Only cookie expiry intant: " (t/instant jwt-expiry)))
 
-           #_(let [!t-between (atom (t/between (t/now) (t/instant jwt-expiry)))
-                   t-between (e/watch !t-between)
-                   !interval-running (atom nil) interval-running (e/watch !interval-running)
-                   positive-duration? (fn [d] (t/< (t/new-duration 0 :seconds) d))
-                   _ (when-not interval-running
-                       (println "Setting interval")
-                       (reset! !interval-running
-                               (js/setInterval #(reset! !t-between
-                                                        (t/between (t/now) (t/instant jwt-expiry))) 1000)))
-                   _ (println "the running interval" interval-running)
-                   time-dist [(t/days t-between)
-                              (t/hours t-between)
-                              (t/minutes t-between)
-                              (t/seconds t-between)]
-                   [days hours minutes seconds] time-dist
-                   message (cond
-                             (< 1 days) (str days " days")
-                             (< 24 hours) (str days " day")
-                             (and (< hours 24) (< 2 hours)) (str hours " hours")
-                             (< 1 hours) (str hours " hour and " minutes " minutes")
-                             :else (str minutes " minutes " (mod seconds 60) "seconds"))]
-               (dom/p (dom/text "Positive duration: " (positive-duration? t-between)))
-               (when-not (positive-duration? t-between)
-                 (set! (.-href js/window.location) "/auth"))
-               (dom/p (dom/text t-between))
-               (dom/p (dom/text message)))))))
+            #_(let [!t-between (atom (t/between (t/now) (t/instant jwt-expiry)))
+                    t-between (e/watch !t-between)
+                    !interval-running (atom nil) interval-running (e/watch !interval-running)
+                    positive-duration? (fn [d] (t/< (t/new-duration 0 :seconds) d))
+                    _ (when-not interval-running
+                        (println "Setting interval")
+                        (reset! !interval-running
+                                (js/setInterval #(reset! !t-between
+                                                         (t/between (t/now) (t/instant jwt-expiry))) 1000)))
+                    _ (println "the running interval" interval-running)
+                    time-dist [(t/days t-between)
+                               (t/hours t-between)
+                               (t/minutes t-between)
+                               (t/seconds t-between)]
+                    [days hours minutes seconds] time-dist
+                    message (cond
+                              (< 1 days) (str days " days")
+                              (< 24 hours) (str days " day")
+                              (and (< hours 24) (< 2 hours)) (str hours " hours")
+                              (< 1 hours) (str hours " hour and " minutes " minutes")
+                              :else (str minutes " minutes " (mod seconds 60) "seconds"))]
+                (dom/p (dom/text "Positive duration: " (positive-duration? t-between)))
+                (when-not (positive-duration? t-between)
+                  (set! (.-href js/window.location) "/auth"))
+                (dom/p (dom/text t-between))
+                (dom/p (dom/text message)))))))
 
-    (dom/button
-     (dom/props {:class "px-4 py-2 bg-black text-white rounded"})
-     (dom/on "click" (e/fn [e] (set! (.-href js/window.location) "/logout")))
-     (dom/text "Sign out"))
+     (dom/button
+      (dom/props {:class "px-4 py-2 bg-black text-white rounded"})
+      (dom/on "click" (e/fn [e] (set! (.-href js/window.location) "/logout")))
+      (dom/text "Sign out"))
                           ;;
-    (let [!email (atom nil) email (e/watch !email)]
-      (dom/div
-       (dom/props {:class "flex gap-4"})
-       (dom/input
-        (dom/props {:class "px-4 py-2 border rounded"
-                    :placeholder "Enter email"
-                    :value email})
-        (dom/on "keyup" (e/fn [e]
-                          (if-some [v (not-empty (.. e -target -value))]
-                            (reset! !email v)
-                            (reset! !email nil)))))
-       (dom/button (dom/props {:class "px-4 py-2 rounded bg-black hover:bg-slate-800 text-white"})
-                   (dom/on "click" (e/fn [_]
-                                     (when-let [email @!email]
-                                       (e/server
-                                        (auth/send-confirmation-code "kunnskap@digdir.cloud" (auth/generate-confirmation-code email))
-                                        nil))))
-                   (dom/text "Send Code"))
-       (dom/button
-        (dom/props {:class "px-4 py-2 rounded bg-black hover:bg-slate-800 text-white"})
-        (dom/on "click" (e/fn [_]
-                          (when-let [email @!email]
-                            (e/server
-                             (let [current-user (:user-id (auth/verify-token (get-in e/http-request [:cookies "auth-token" :value])))
-                                   admin-id (e/offload #(fetch-user-id db current-user))]
-                               (e/offload #(auth/create-new-user {:email email
-                                                                  :creator-id admin-id}))
-                               nil)
-                             (auth/generate-confirmation-code email)
-                             nil))))
-        (dom/text "Generate Code"))))
+     (let [!email (atom nil) email (e/watch !email)]
+       (dom/div
+        (dom/props {:class "flex gap-4"})
+        (dom/input
+         (dom/props {:class "px-4 py-2 border rounded"
+                     :placeholder "Enter email"
+                     :value email})
+         (dom/on "keyup" (e/fn [e]
+                           (if-some [v (not-empty (.. e -target -value))]
+                             (reset! !email v)
+                             (reset! !email nil)))))
+        (dom/button (dom/props {:class "px-4 py-2 rounded bg-black hover:bg-slate-800 text-white"})
+                    (dom/on "click" (e/fn [_]
+                                      (when-let [email @!email]
+                                        (e/server
+                                         (auth/send-confirmation-code "kunnskap@digdir.cloud" (auth/generate-confirmation-code email))
+                                         nil))))
+                    (dom/text "Send Code"))
+        (dom/button
+         (dom/props {:class "px-4 py-2 rounded bg-black hover:bg-slate-800 text-white"})
+         (dom/on "click" (e/fn [_]
+                           (when-let [email @!email]
+                             (e/server
+                              (let [current-user (:user-id (auth/verify-token (get-in e/http-request [:cookies "auth-token" :value])))
+                                    admin-id (e/offload #(fetch-user-id db current-user))]
+                                (e/offload #(auth/create-new-user {:email email
+                                                                   :creator-id admin-id}))
+                                nil)
+                              (auth/generate-confirmation-code email)
+                              nil))))
+         (dom/text "Generate Code"))))
 
-    (dom/p (dom/text "Auth db"))
-    (dom/pre (dom/text (rhizome/pretty-print (e/server (e/offload #(auth/all-accounts auth-conn))))))
+     (dom/p (dom/text "Auth db"))
+     (dom/pre (dom/text (rhizome/pretty-print (e/server (e/offload #(auth/all-accounts auth-conn))))))
 
 
-    (dom/p (dom/text "Active Confirmation Codes"))
-    (dom/ul (dom/props {:class "flex flex-col gap-2"})
-            (e/for-by identity [user-code (e/server (map (fn [[key value]] [key (update value :expiry str)])
-                                                         (e/watch auth/confirmation-codes)))]
+     (dom/p (dom/text "Active Confirmation Codes"))
+     (dom/ul (dom/props {:class "flex flex-col gap-2"})
+             (e/for-by identity [user-code (e/server (map (fn [[key value]] [key (update value :expiry str)])
+                                                          (e/watch auth/confirmation-codes)))]
 
-                      (dom/li (dom/props {:class "flex"})
-                              (dom/p (dom/text user-code))
-                              (dom/button
-                               (dom/props {:class "px-2 py-1 rounded bg-black text-white"})
-                               (dom/on "click" (e/fn [_]
-                                                 (e/server
-                                                  (swap! auth/confirmation-codes dissoc (first user-code))
-                                                  nil)))
-                               (dom/text "Remove"))))))))
+                       (dom/li (dom/props {:class "flex"})
+                               (dom/p (dom/text user-code))
+                               (dom/button
+                                (dom/props {:class "px-2 py-1 rounded bg-black text-white"})
+                                (dom/on "click" (e/fn [_]
+                                                  (e/server
+                                                   (swap! auth/confirmation-codes dissoc (first user-code))
+                                                   nil)))
+                                (dom/text "Remove")))))))))
 
 (e/defn Home []
   (e/client
    (dom/div
-    (dom/props {:class "h-[calc(100vh-10rem)] w-full flex flex-col justify-center items-center"})
+    (dom/props {:class "max-h-full overflow-x-hidden"})
     (dom/div
-     (dom/props {:class "flex flex-col items-center mx-auto max-w-3xl px-4"})
-
+     (dom/props {:class "h-[calc(100vh-10rem)] w-full flex flex-col justify-center items-center"})
      (dom/div
-      (dom/props {:class "w-full max-w-[600px]"})
+      (dom/props {:class "flex flex-col items-center mx-auto max-w-3xl px-4"})
+
+      (dom/div
+       (dom/props {:class "w-full max-w-[600px]"})
 
       ;; Title
-      (dom/div
-       (dom/h2
-        (dom/props {:class "text-2xl font-bold text-center"})
-        (dom/text "Presis og pålitelig innsikt,"))
-       (dom/h2
-        (dom/props {:class "text-2xl font-bold text-center"})
-        (dom/text "skreddersydd for deg.")))
+       (dom/div
+        (dom/h2
+         (dom/props {:class "text-2xl font-bold text-center"})
+         (dom/text "Presis og pålitelig innsikt,"))
+        (dom/h2
+         (dom/props {:class "text-2xl font-bold text-center"})
+         (dom/text "skreddersydd for deg.")))
 
       ;; Subtitle
-      (dom/p
-       (dom/props {:class "text-center"})
-       (dom/text "Skriv stikkord om hva du leter etter:"))
+       (dom/p
+        (dom/props {:class "text-center"})
+        (dom/text "Skriv stikkord om hva du leter etter:"))
 
       ;; List
-      (dom/ul
-       (dom/props {:class "list-disc px-4 text-left"})
-       (dom/li (dom/text "Type dokumenter (tildelingsbrev, årsrapport)"))
-       (dom/li (dom/text "Årstall"))
-       (dom/li (dom/text "Bransje eller sektor (f.eks teknologi, offentlig sektor)"))
-       (dom/li (dom/text "Tema (bærekraft, likestilling, innovasjon)")))
-      
-      )))
+       (dom/ul
+        (dom/props {:class "list-disc px-4 text-left"})
+        (dom/li (dom/text "Type dokumenter (tildelingsbrev, årsrapport)"))
+        (dom/li (dom/text "Årstall"))
+        (dom/li (dom/text "Bransje eller sektor (f.eks teknologi, offentlig sektor)"))
+        (dom/li (dom/text "Tema (bærekraft, likestilling, innovasjon)")))))))
 
    #_(dom/div
       (dom/props {:class "h-[calc(100vh-10rem)] w-full flex flex-col"})
@@ -879,14 +926,13 @@
   (e/client
     (dom/div (dom/props {:class "flex flex-1 h-full w-full"})
       (dom/div (dom/props {:class "relative flex-1 overflow-hidden pb-[120px]"})
-        (dom/div (dom/props {:class "max-h-full overflow-x-hidden"})
-          (case (e/watch !view-main)
-            :home (Home.)
-            :conversation (Conversation.)
-            :dashboard (AuthAdminDashboard.))
-          (when (e/watch debug/!debug?) 
-            (debug/DBInspector. {:!active-conversation !active-conversation
-                                 :!conversation-entity !conversation-entity})))))))
+               (case (e/watch !view-main)
+                 :home (Home.)
+                 :conversation (Conversation.)
+                 :dashboard (AuthAdminDashboard.))
+               (when (e/watch debug/!debug?)
+                 (debug/DBInspector. {:!active-conversation !active-conversation
+                                      :!conversation-entity !conversation-entity}))))))
 
 (e/defn Topbar []
   (e/client
