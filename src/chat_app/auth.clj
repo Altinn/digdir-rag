@@ -61,7 +61,7 @@
 
 (def secret "cd5e984eaf41-16f2b708-9af6-497f")
 
-(def domain-whitelist #{"@digdir.no" "@dfd.dep.no" "@dfo.no" "@digdir.cloud" "@itonomi.com"})
+(def domain-whitelist #{"@digdir.no" "@dfd.dep.no" "@dss.dep.no" "@dfo.no" "@digdir.cloud" "@itonomi.com"})
 
 (def admin-users #{"wd@itonomi.com" "bdb@itonomi.com" "olavfosse@itonomi.com"})
 

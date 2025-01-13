@@ -203,8 +203,7 @@
                               :query_by "doc_num"
                               :facet_by (clojure.string/join "," all-field-names)
                               :page 1
-
-                              :max_facet_values 10
+                              :max_facet_values 300
                               :per_page 6
                               :collection docs-collection-name})
 
@@ -224,6 +223,9 @@
 
 
 (comment
+
+  
+  (def docs-collection-name "TEST_kudos_docs")
 
   (def input-filter-maps
     [;;
@@ -292,7 +294,9 @@
 
   (def target-search-config
     [{:searches
-      [{:collection "KUDOS_docs_2024-12-10",
+      [
+       ;; n 0
+       {:collection docs-collection-name,
         :q "*",
         :query_by "doc_num",
         :facet_by "orgs_short,owner_short",
@@ -300,7 +304,7 @@
         :max_facet_values 30,
         :page 1,
         :per_page 1}
-       {:collection "KUDOS_docs_2024-12-10",
+       {:collection docs-collection-name,
         :q "*",
         :query_by "doc_num",
         :facet_by "orgs_short",
@@ -308,10 +312,10 @@
         :page 1
         :per_page 1}]}
      
-     ;; n 3
+     ;; n 1
      {:searches
       [;;
-       {:collection "KUDOS_docs_2024-12-10",
+       {:collection docs-collection-name,
         :q "*",
         :query_by "doc_num",
         :max_facet_values 30,
@@ -319,13 +323,14 @@
         :per_page 1,
         :facet_by "orgs_short,owner_short",
         :filter_by "orgs_short:=[`DFD`] && owner_short:=[`Digdir`]"}
-       {:collection "KUDOS_docs_2024-12-10",
+       {:collection docs-collection-name,
         :q "*",
         :query_by "doc_num",
         :max_facet_values 30,
         :page 1,
         :per_page 1
         :facet_by "orgs_short"}]}
+     ;; n 2
      {:searches
       [{:q "*",
         :query_by "doc_num",
@@ -334,21 +339,22 @@
         :filter_by "orgs_short:=[`DFD`,`KDD`] && owner_short:=[`DFD`]",
         :max_facet_values 10,
         :per_page 6,
-        :collection "KUDOS_docs_2024-12-10"}
+        :collection docs-collection-name}
        {:query_by "doc_num",
         :highlight_full_fields "doc_num",
-        :collection "KUDOS_docs_2024-12-10",
+        :collection docs-collection-name,
         :q "*",
         :facet_by "orgs_short",
         :filter_by "owner_short:=[`DFD`]",
         :page 1}
        {:query_by "doc_num",
         :highlight_full_fields "doc_num",
-        :collection "KUDOS_docs_2024-12-10",
+        :collection docs-collection-name,
         :q "*",
         :facet_by "owner_short",
         :filter_by "orgs_short:=[`DFD`,`KDD`]",
         :page 1}]}
+     ;; n 3
      {:searches
       [{:q "*",
         :query_by "doc_num",
@@ -358,9 +364,9 @@
         "orgs_short:=[`DFD`,`KDD`] && owner_short:=[`DFD`,`Digdir`] && recipient_short:=[`DFD`]",
         :max_facet_values 10,
         :per_page 6,
-        :collection "KUDOS_docs_2024-12-10"}
+        :collection docs-collection-name}
        {:query_by "doc_num",
-        :collection "KUDOS_docs_2024-12-10",
+        :collection docs-collection-name,
         :q "*",
         :facet_by "orgs_short",
         :filter_by
@@ -368,14 +374,14 @@
         :max_facet_values 10,
         :page 1}
        {:query_by "doc_num",
-        :collection "KUDOS_docs_2024-12-10",
+        :collection docs-collection-name,
         :q "*",
         :facet_by "owner_short",
         :filter_by "orgs_short:=[`DFD`,`KDD`] && recipient_short:=[`DFD`]",
         :max_facet_values 10,
         :page 1}
        {:query_by "doc_num",
-        :collection "KUDOS_docs_2024-12-10",
+        :collection docs-collection-name,
         :q "*",
         :facet_by "recipient_short",
         :filter_by
@@ -393,9 +399,9 @@
         "orgs_short:=[`DFD`,`KDD`] && owner_short:=[`DFD`,`Digdir`] && recipient_short:=[`DFD`]",
         :max_facet_values 10,
         :per_page 6,
-        :collection "KUDOS_docs_2024-12-10"}
+        :collection docs-collection-name}
        {:query_by "doc_num",
-        :collection "KUDOS_docs_2024-12-10",
+        :collection docs-collection-name,
         :q "*",
         :facet_by "orgs_short",
         :filter_by
@@ -403,14 +409,14 @@
         :max_facet_values 10,
         :page 1}
        {:query_by "doc_num",
-        :collection "KUDOS_docs_2024-12-10",
+        :collection docs-collection-name,
         :q "*",
         :facet_by "owner_short",
         :filter_by "orgs_short:=[`DFD`,`KDD`] && recipient_short:=[`DFD`]",
         :max_facet_values 10,
         :page 1}
        {:query_by "doc_num",
-        :collection "KUDOS_docs_2024-12-10",
+        :collection docs-collection-name,
         :q "*",
         :facet_by "recipient_short",
         :filter_by
@@ -418,12 +424,71 @@
         :max_facet_values 10,
         :page 1}]}])
 
-  (def n 4)
+  (def n 0)
 
   (= (filter-map->typesense-facet-multi-search
       (nth input-filter-maps n)
-      "KUDOS_docs_2024-12-10")
+      docs-collection-name)
      (nth target-search-config n))
+  
+  (def conversation-entity {:id "71e1adbe-2116-478d-92b8-40b10a612d7b"
+                             :name "Kunnskapsassistent - test"
+                             :image "kudos-logo.png"
+                             :docs-collection "TEST_kudos_docs"
+                             :chunks-collection "TEST_kudos_chunks"
+                             :phrases-collection "TEST_kudos_phrases"
+                             :phrase-gen-prompt "keyword-search"
+                             :reasoning-languages ["en" "no"]
+                             :prompt ""})
+  
+  (let [multi-search 
+        {:searches
+        [ {:q "*",
+           :query_by "doc_num",
+           :facet_by "orgs_short,owner_short",
+           :page 1,
+           :max_facet_values 10,
+           :per_page 6,
+           :collection "TEST_kudos_docs"}
+         {:q "*",
+          :query_by "doc_num",
+          :facet_by "orgs_short",
+          :page 1,
+          :filter_by "owner_short:=[]",
+          :max_facet_values 10,
+          :collection "TEST_kudos_docs"}
+         {:q "*",
+          :query_by "doc_num",
+          :facet_by "owner_short",
+          :page 1,
+          :filter_by "orgs_short:=[`DFD`]",
+          :max_facet_values 10,
+          :collection "TEST_kudos_docs"}]}
+
+        #_(filter-map->typesense-facet-multi-search
+                      (nth input-filter-maps n)
+                      (:docs-collection conversation-entity))]
+    (try
+      (let [results (:results (ts-client/multi-search ts-cfg multi-search {:query_by "doc_num"}))
+            opts (options results)]
+        results)
+      (catch Exception e
+        (println "Error in fetch-facets:" (.getMessage e) "Error: " (str e) "queries:" multi-search))))
+  
+  (ts-client/multi-search ts-cfg 
+   {:searches [ {:q "Instruks help", 
+                 :sort_by "_text_match:desc", :limit 20, 
+                 :exclude_fields "phrase_vec", 
+                 :filter_by "$KUDOS_docs_2024-12-10(type:=['Instruks'])", 
+                 :prioritize_exact_match false, :drop_tokens_threshold 5, 
+                 :include_fields "chunk_id,search_phrase", 
+                 :collection "KUDOS_phrases_2024-12-10"}]}
+   {:query_by "chunk_id"})
+  
+  (fetch-facets conversation-entity
+                (filter-map->typesense-facet-multi-search
+                 (nth input-filter-maps n)
+                 docs-collection-name))
 
   )
 
@@ -894,7 +959,7 @@
                (throw (ex-info "No search phrase found" {})))
            ;;  _ (println "first search-phrase-hit:" (first search-phrase-hits))
 
-           _ (println "starting to retrieve chunks...")
+           _ (println "retrieving docs from " (:docsCollectionName params) "and chunks from" (:chunksCollectionName params))
            retrieved-chunks (retrieve-chunks-by-id
                              (:docsCollectionName params)
                              (:chunksCollectionName params)
@@ -1044,9 +1109,9 @@
                             :maxSourceDocCount 10
                             :maxContextLength 10000
                             :maxSourceLength 40000
-                            :docsCollectionName "KUDOS_docs_2024-09-27_chunkr_test"
-                            :chunksCollectionName "KUDOS_chunks_2024-09-27_chunkr_test"
-                            :phrasesCollectionName "KUDOS_phrases_2024-09-27_chunkr_test"
+                            :docsCollectionName "TEST_kudos_docs"
+                            :chunksCollectionName "TEST_kudos_chunks"
+                            :phrasesCollectionName "TEST_kudos_phrases"
                             :stream_callback_msg1 nil
                             :stream_callback_msg2 nil
                             :streamCallbackFreqSec 2.0
@@ -1055,7 +1120,7 @@
      (def rag-results (rag-pipeline kudos-rag-params conn))
 
      ;;  (answer-followup-user-query conn (:conversation-id rag-results) "hvilke kriterie definerer høyrisiko?")
-
+     
      (defn get-newest-conversation-id
        "Retrieves the ID of the most recently created conversation."
        []
@@ -1079,7 +1144,7 @@
 
 
      ;; RAG stuff
-
+     
 
      (def convo-id (:conversation-id rag-params))
      (db/transact-new-msg-thread conn {:convo-id convo-id
@@ -1089,7 +1154,7 @@
      (def extract-search-queries (query-relaxation (:translated_user_query rag-params)
                                                    (:promptRagQueryRelax rag-params)))
      ;; durations (assoc durations :generate_searches (- (System/currentTimeMillis) start))
-
+     
      (def search-phrase-hits (lookup-search-phrases-similar
                               (:phrasesCollectionName rag-params)
                               (:docsCollectionName rag-params)
@@ -1100,6 +1165,22 @@
                             (:docsCollectionName rag-params)
                             (:chunksCollectionName rag-params)
                             search-phrase-hits))
+     
+     ;; debug retrieve-chunks-by-id
+     ;; seems to be a bug in Typesense. 
+     ;; - Iif you recreate the docs collection, 
+     ;; the chunks and phrases connection will fail silently in this query:
+     (ts-client/multi-search ts-cfg
+                             {:searches
+                              (vector {:collection "TEST_kudos_chunks", :q "26803-1",
+                                       :include_fields "id,chunk_id,doc_num,$TEST_kudos_docs(title,source_document_url)",
+                                       :filter_by "chunk_id:=`26803-1`", 
+                                       :page 1, :per_page 1}),
+                              :limit_multi_searches 40}
+                             {:query_by "chunk_id"})
+     
+     
+     (retrieve-chunks-by-id "KUDOS_docs_2024-12-10" "KUDOS_chunks_2024-12-10" (vector {:chunk_id "26803-1", :rank 0.699999988079071, :index 0}))
 
      (count retrieved-chunks)
 
