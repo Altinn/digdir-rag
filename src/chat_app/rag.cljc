@@ -8,6 +8,7 @@
             ;; [hashp.core :refer [p]]
             #?(:clj [clj-http.client :as http])
             #?(:clj [wkok.openai-clojure.api :as openai])
+            #?(:clj [services.openai :as llm])
             #?(:clj [datahike.api :as d])
             #?(:clj [models.db :as db :refer [delayed-connection]])
             #?(:clj [markdown.core :as md2])))
@@ -57,8 +58,6 @@
 #?(:clj (defn env-var [key]
           (System/getenv key)))
 
-#?(:clj (def use-azure-openai (= "true" (env-var "USE_AZURE_OPENAI_API"))))
-
 #?(:clj (def ts-cfg {:uri (str "https://" (env-var "TYPESENSE_API_HOST"))
                      :key (env-var "TYPESENSE_API_KEY")}))
 
@@ -85,7 +84,7 @@
            (println (str "prompt.rag.queryRelax: \n" prompt)))
 
        (reset! query-result
-               (if use-azure-openai
+               (if (llm/use-azure-openai)
                  (openai/create-chat-completion
                   {:model (env-var "AZURE_OPENAI_DEPLOYMENT_NAME")
                    :messages [{:role "system" :content "You are a helpful assistant. Reply with supplied JSON format."}
@@ -746,7 +745,7 @@
            _ (prn (str "\n\n*** Starting RAG structured output chain, llm: " (env-var "OPENAI_API_MODEL_NAME") " full-prompt: \n\n"))
            ;;  _ (prn full-prompt)
            chat-response
-           (if use-azure-openai
+           (if (llm/use-azure-openai)
              (openai/create-chat-completion
               {:model (env-var "AZURE_OPENAI_DEPLOYMENT_NAME")
                :messages [{:role "system" :content "You are a helpful assistant."}
@@ -803,7 +802,7 @@
 #?(:clj
    (defn simplify-convo-topic [!dh-conn params]
      (let [summary-response
-           (if use-azure-openai
+           (if (llm/use-azure-openai)
              (openai/create-chat-completion
               {:model (env-var "AZURE_OPENAI_DEPLOYMENT_NAME")
                :messages [{:role "system"
@@ -1131,6 +1130,29 @@
              result (d/q query @conn)]
          (when (seq result)
            (second (first result)))))
+     
+     (defn get-recent-conversations
+       "Retrieves the 10 most recent conversations with their metadata.
+           Returns a sequence of maps containing :id, :created, :topic"
+       []
+       (let [query '[:find ?id (max ?created) ?topic
+                     :where
+                     [?e :conversation/id ?id]
+                     [?e :conversation/created ?created]
+                     [?e :conversation/topic ?topic] 
+                     :limit 10]
+             results (d/q query @conn)]
+         (when (seq results)
+           (->> results
+                (map (fn [[id created topic]]
+                       {:id id
+                        :created created
+                        :topic topic}))
+                (sort-by :created >)))))
+     
+     (get-recent-conversations)
+
+     (def rag-params (assoc kudos-rag-params :conversation-id "7zvrhkUE_3I2sEoSBiJ16"))
 
      (def rag-params (assoc kudos-rag-params :conversation-id (get-newest-conversation-id)))
      (def durations {:total 0
@@ -1199,6 +1221,30 @@
      (def rag-params (assoc rag-params :conversation-id (get-newest-conversation-id)))
 
      (rag-pipeline rag-params conn)
+
+(defn get-conversation-messages
+  "Retrieves all messages for the specified conversation ID."
+  [conn conversation-id]
+  (let [query '[:find ?text ?role ?voice ?created
+                :in $ ?conv-id
+                :where
+                [?e :conversation/id ?conv-id]
+                [?e :conversation/messages ?m]
+                [?m :message/text ?text]
+                [?m :message/role ?role]
+                [?m :message/voice ?voice]
+                [?m :message/created ?created]]
+        results (d/q query @conn conversation-id)]
+    (->> results
+         (map (fn [[text role voice created]]
+                {:text text
+                 :role role
+                 :voice voice
+                 :created created}))
+         (sort-by :created))))
+
+(get-conversation-messages conn "7zvrhkUE_3I2sEoSBiJ16")
+
 
      ;;
      ))

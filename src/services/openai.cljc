@@ -37,9 +37,11 @@
             (reset! !wait? false)
             (println "reset wait to false"))))
 
+#?(:clj (defn use-azure-openai [] (not= "false" (System/getenv "USE_AZURE_OPENAI_API"))))
+
 #?(:clj
    (defn create-chat-completion [messages]
-     (if (= "true" (System/getenv "USE_AZURE_OPENAI"))
+     (if (use-azure-openai)
        (api/create-chat-completion
         {:model (System/getenv "AZURE_OPENAI_DEPLOYMENT_NAME")
          :messages messages

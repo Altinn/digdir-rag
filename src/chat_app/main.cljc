@@ -381,38 +381,40 @@
                                scroll-bottom (+ (.-scrollTop target) (.-clientHeight target))
                                scroll-height (.-scrollHeight target)
                                at-bottom (<= (- scroll-height scroll-bottom) 1.0)]
-                           (println "Scrolling, at bottom?" at-bottom "scroll values - bottom:" scroll-bottom "height:" scroll-height "diff:" (- scroll-height scroll-bottom))
+                           (when at-bottom
+                             (println "Scrolling, at bottom?" at-bottom "scroll values - bottom:" scroll-bottom 
+                                      "height:" scroll-height "diff:" (- scroll-height scroll-bottom)))
                            (reset! !is-at-bottom at-bottom))))
 
       (when
        (and (some? convo-id)
-            (some? conversation-entity)
-            (let [messages (e/server (e/offload #(rag/prepare-conversation db convo-id conversation-entity)))]
-              (dom/div
-               (dom/props {:class "max-h-full overflow-x-hidden"})
-               (observe-resize dom/node scroll-to-bottom)
+            (some? conversation-entity))
+        (let [messages (e/server (e/offload #(rag/prepare-conversation db convo-id conversation-entity)))]
+          (dom/div
+           (dom/props {:class "max-h-full overflow-x-hidden"})
+           (observe-resize dom/node scroll-to-bottom)
 
-               (dom/div
-                (dom/props {:class "flex flex-col stretch justify-center items-center h-full lg:max-w-3xl mx-auto gap-4"})
+           (dom/div
+            (dom/props {:class "flex flex-col stretch justify-center items-center h-full lg:max-w-3xl mx-auto gap-4"})
 
-                (dom/div (dom/props {:class "flex flex-col gap-8 items-center"})
+            (dom/div (dom/props {:class "flex flex-col gap-8 items-center"})
 
-                         #_(dom/img (dom/props {:class "w-48 mx-auto rounded-full"
-                                                :src image}))
-                         (dom/h1 (dom/props {:class "text-2xl"}) (dom/text (or full-name name))))
-                (when messages ;todo: check if this is still needed
-                  (e/for [msg (butlast messages)]
-                    (RenderMsg. msg false))
-                  (RenderMsg. (last messages) true)
-                  (when-let [rs (first response-states)] (ResponseState. rs)))
+                     #_(dom/img (dom/props {:class "w-48 mx-auto rounded-full"
+                                            :src image}))
+                     (dom/h1 (dom/props {:class "text-2xl"}) (dom/text (or full-name name))))
+            (when messages ;todo: check if this is still needed
+              (e/for [msg (butlast messages)]
+                (RenderMsg. msg false))
+              (RenderMsg. (last messages) true)
+              (when-let [rs (first response-states)] (ResponseState. rs)))
 
-                (let [stream-msgs (e/server (e/watch !stream-msgs))]
-                  (when (:streaming (get stream-msgs convo-id))
-                    (when-let [content (:content (get stream-msgs convo-id))]
-                      (BotMsg. content))))
+            (let [stream-msgs (e/server (e/watch !stream-msgs))]
+              (when (:streaming (get stream-msgs convo-id))
+                (when-let [content (:content (get stream-msgs convo-id))]
+                  (BotMsg. content))))
 
-                (PromptInput. {:convo-id convo-id
-                               :messages messages}))))))))))
+            (PromptInput. {:convo-id convo-id
+                           :messages messages})))))))))
 
 
 (e/defn ConversationList [conversations]
@@ -870,25 +872,23 @@
 
       ;; Title
        (dom/div
-        (dom/h2
-         (dom/props {:class "text-2xl font-bold text-center"})
+        (dom/h1
+         (dom/props {:class "text-2xl font-bold text-center text-gray-500"})
          (dom/text "Presis og pålitelig innsikt,"))
-        (dom/h2
-         (dom/props {:class "text-2xl font-bold text-center"})
+        (dom/h1
+         (dom/props {:class "text-2xl font-bold text-center text-gray-500 mb-6"})
          (dom/text "skreddersydd for deg.")))
 
       ;; Subtitle
        (dom/p
-        (dom/props {:class "text-center"})
-        (dom/text "Skriv stikkord om hva du leter etter:"))
-
-      ;; List
-       (dom/ul
-        (dom/props {:class "list-disc px-4 text-left"})
-        (dom/li (dom/text "Type dokumenter (tildelingsbrev, årsrapport)"))
-        (dom/li (dom/text "Årstall"))
-        (dom/li (dom/text "Bransje eller sektor (f.eks teknologi, offentlig sektor)"))
-        (dom/li (dom/text "Tema (bærekraft, likestilling, innovasjon)")))))))
+        (dom/props {:class "text-center text-lg text-gray-500"})
+        (dom/text "Utforsk Kudos-dokumenter fra 2020-2023"))
+       (dom/p
+        (dom/props {:class "text-center text-lg text-gray-500"})
+        (dom/text "som tildelingsbrev, årsrapporter og evalueringer.")) 
+       (dom/p
+        (dom/props {:class "text-center text-lg text-gray-500"})
+        (dom/text "Kjapt og enkelt."))))))
 
    #_(dom/div
       (dom/props {:class "h-[calc(100vh-10rem)] w-full flex flex-col"})

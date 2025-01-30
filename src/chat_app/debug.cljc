@@ -67,7 +67,7 @@
 (e/defn DebugController []
   (e/client
     (let [debug? (e/watch !debug?)]
-      (ui/button
+      #_(ui/button
         (e/fn [] (swap! !debug? not))
         (dom/props {:class (str "absolute top-0 right-0 z-10 px-4 py-2 rounded text-black"
                              (if-not debug?
