@@ -708,17 +708,17 @@ __metadata:
   languageName: node
   linkType: hard
 
-"commander@npm:^2.19.0":
-  version: 2.20.3
-  resolution: "commander@npm:2.20.3"
-  checksum: 10c0/74c781a5248c2402a0a3e966a0a2bba3c054aad144f5c023364be83265e796b20565aa9feff624132ff629aa64e16999fa40a743c10c12f7c61e96a794b99288
-  languageName: node
-  linkType: hard
-
 "commander@npm:^4.0.0":
   version: 4.1.1
   resolution: "commander@npm:4.1.1"
   checksum: 10c0/84a76c08fe6cc08c9c93f62ac573d2907d8e79138999312c92d4155bc2325d487d64d13f669b2000c9f8caf70493c1be2dac74fec3c51d5a04f8bc3ae1830bab
+  languageName: node
+  linkType: hard
+
+"commander@npm:^8.3.0":
+  version: 8.3.0
+  resolution: "commander@npm:8.3.0"
+  checksum: 10c0/8b043bb8322ea1c39664a1598a95e0495bfe4ca2fad0d84a92d7d1d8d213e2a155b441d2470c8e08de7c4a28cf2bc6e169211c49e1b21d9f7edc6ae4d9356060
   languageName: node
   linkType: hard
 
@@ -994,7 +994,7 @@ __metadata:
     "@js-joda/locale_en-us": "npm:^4.14.0"
     "@js-joda/timezone": "npm:^2.21.1"
     concurrently: "npm:^8.2.0"
-    katex: "npm:^0.12.0"
+    katex: "npm:^0.16.0"
     markdown-it: "npm:^12.2.0"
     markdown-it-block-image: "npm:^0.0.3"
     markdown-it-footnote: "npm:^3.0.3"
@@ -1625,14 +1625,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"katex@npm:^0.12.0":
-  version: 0.12.0
-  resolution: "katex@npm:0.12.0"
+"katex@npm:^0.16.0":
+  version: 0.16.21
+  resolution: "katex@npm:0.16.21"
   dependencies:
-    commander: "npm:^2.19.0"
+    commander: "npm:^8.3.0"
   bin:
     katex: cli.js
-  checksum: 10c0/f75e4f398c70f1631a6f433575dde4608c21a4fb65f532946995e7724efc8650dad2f6b02af5235323b26673b0e0ed3711491e1a2a214a48625d6e5d84a1341b
+  checksum: 10c0/e2e4139ba72a13f2393308fbb2b4c5511611a19a40a6e39d956cf775e553af3517dbfd0a54477faaf401c923e4654e32296347846b8ff15dfa579f88ff8579bb
   languageName: node
   linkType: hard
 
