@@ -15,7 +15,7 @@
     "@js-joda/locale_en-us": "^4.14.0",
     "@js-joda/timezone": "^2.21.1",
     "concurrently": "^8.2.0",
-    "katex": "^0.12.0",
+    "katex": "^0.16.0",
     "markdown-it": "^12.2.0",
     "markdown-it-block-image": "^0.0.3",
     "markdown-it-footnote": "^3.0.3",
