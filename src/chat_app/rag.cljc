@@ -11,7 +11,8 @@
             #?(:clj [services.openai :as llm])
             #?(:clj [datahike.api :as d])
             #?(:clj [models.db :as db :refer [delayed-connection]])
-            #?(:clj [markdown.core :as md2])))
+            #?(:clj [markdown.core :as md2])
+            [lambdaisland.deep-diff2 :as ddiff]))
 (defn T
   "For debugging
   Input → ___ → Output
@@ -25,6 +26,15 @@
   ([tag x]
    (prn tag x)
    x))
+
+(defn print-diff [old new]
+  (-> (ddiff/diff old new)
+      ddiff/minimize
+      ddiff/pretty-print ;; Printing directly with
+                       ;; ddiff/pretty-print does not look
+                       ;; right
+      with-out-str
+      print))
 
 (def stage-name "DOCS_QA_RAG")
 
@@ -183,10 +193,11 @@
      "Converts a filter map to a Typesense multi-search with disjunctive faceting"
      [{:keys [fields max-options]} docs-collection-name]
      (let [all-field-names (map :field fields)
+           fields-with-selections (filter #(not-empty (:selected-options %)) fields)
 
-           ;; Helper function to create filter string
+           ;; Helper function to create filter string for selected options
            create-filter-str (fn [excluded-field]
-                               (->> fields
+                              (->> fields-with-selections
                                     (remove #(= (:field %) excluded-field))
                                     (map (fn [{:keys [field selected-options]}]
                                            (str field ":=[" 
@@ -196,29 +207,48 @@
                                     (clojure.string/join " && ")))
 
            ;; Main search with all filters and facets
+           all-facets (into {}
+                             (remove (fn [[_ v]] (#{"" nil} v)))
+                             (merge
+                              {:q "*"
+                               :query_by "doc_num"
+                               :facet_by (clojure.string/join "," all-field-names)
+                               :page 1
+                               :max_facet_values (or max-options 300)
+                               :per_page 6
+                               :collection docs-collection-name}
+                              ))
+           
+           ;; Main search with all filters and facets
            main-search (into {} 
                              (remove (fn [[_ v]] (#{"" nil} v)))
+                            (merge
                              {:q "*"
                               :query_by "doc_num"
                               :facet_by (clojure.string/join "," all-field-names)
                               :page 1
-                              :max_facet_values 300
+                               :max_facet_values (or max-options 300)
                               :per_page 6
-                              :collection docs-collection-name})
+                               :collection docs-collection-name}
+                              (when (seq fields-with-selections)
+                                {:filter_by (create-filter-str nil)})))
 
-           ;; Individual facet searches
+           ;; Individual facet searches - only for fields with selections
            facet-searches (map (fn [{:keys [field]}]
+                                (into {}
+                                      (remove (fn [[_ v]] (#{"" nil} v)))
+                                      (merge
                                  {:q "*"
                                   :query_by "doc_num"
                                   :facet_by field
                                   :page 1
-                                  :filter_by (create-filter-str field)
-                                  :max_facet_values 10
-                                  
-                                  :collection docs-collection-name})
-                               fields)] 
+                                         :max_facet_values (or max-options 300)
+                                         :collection docs-collection-name}
+                                        (when-let [filter-str (create-filter-str field)]
+                                          {:filter_by filter-str}))))
+                              fields-with-selections)]
 
-       {:searches (cons main-search facet-searches)})))
+       {:searches (vec (concat [all-facets main-search] facet-searches))})))
 
 
 (comment
