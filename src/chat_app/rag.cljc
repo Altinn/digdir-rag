@@ -548,26 +548,31 @@
 #?(:clj 
    (defn options [res]
      (def options-input res)
-     ;; If there is no selection for a given field, we find the option
-     ;; data in all-facets, otherwise in rest-facets.
-     (let [fallback-field->counts (->> res first :facet_counts field->counts)
-           fallback-field->zero-counts (-> fallback-field->counts
-                                           (update-vals (partial mapv #(assoc % :count 0))))]
-
-       (into {}
-             (map (fn [field-res]
-                    (let [{:as facet_counts
-                           :keys [field_name counts]} (get-in field-res [:facet_counts 0])]
-                      [field_name
-                       (->> (if (empty? counts)
-                              (fallback-field->counts field_name)
-                              (->>
-                               (merge (medley/index-by :value (fallback-field->zero-counts field_name))
-                                      (medley/index-by :value counts))
-                               vals))
+     (let [all-facet-counts (mapcat :facet_counts res)
+           ;; Group by field_name first
+           grouped (group-by :field_name all-facet-counts)
+           ;; For each field_name, combine counts taking max count for each value
+           field->options
+           (reduce-kv
+            (fn [acc field-name field-entries]
+              (let [all-counts (mapcat :counts field-entries)
+                                  ;; Group counts by value and take max count for each
+                    combined-counts (->> all-counts
+                                         (group-by :value)
+                                         (map (fn [[value entries]]
+                                                (if (seq entries)
+                                                  {:value value
+                                                   :count (if (seq (rest entries))
+                                                            (apply max (map :count (rest entries)))
+                                                            0)}
+                                                  {:value value
+                                                   :count 0})))
                             (sort-by :value)
-                            vec)])))
-             (rest res)))))
+                                         vec)]
+                (assoc acc field-name combined-counts)))
+            {}
+            grouped)]
+       field->options)))
 
 
 
@@ -634,12 +639,17 @@
    (defn fetch-facets [conversation-entity filter-map]
      (let [multi-search (filter-map->typesense-facet-multi-search
                          filter-map
-                         (:docs-collection conversation-entity))]
+                         (:docs-collection conversation-entity))
+          ;;  _ (prn-str "fetch-facets multi-search query: " multi-search)
+           ]
        (try
-         (let [results (:results (ts-client/multi-search ts-cfg multi-search {:query_by "doc_num"}))
+         (let [results (:results (ts-client/multi-search
+                                  ts-cfg multi-search {:query_by "doc_num"}))
                opts (options results)]
-           (assoc filter-map :ui/fields (mapv (fn [filter-field]
-                                                (facet-result->ui-field filter-field (opts (:field filter-field))))
+           (assoc filter-map :ui/fields
+                  (mapv (fn [filter-field]
+                          (facet-result->ui-field
+                           filter-field (opts (:field filter-field))))
                                               (:fields filter-map))))
          (catch Exception e
            (println "Error in fetch-facets:" (.getMessage e) "Error: " (str e) "queries:" multi-search)
