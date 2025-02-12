@@ -163,7 +163,7 @@
                                        (when (seq selected-options)
                                          (str field ":=[" 
                                               (clojure.string/join "," 
-                                              (map #(str "'" % "'") selected-options))
+                                              (map #(str "`" % "`") selected-options))
                                               "]"))))
                                 (remove nil?))]
        (when (seq selected-fields)
