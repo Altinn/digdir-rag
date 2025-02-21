@@ -22,7 +22,7 @@
            pandect/pandect {:mvn/version "1.0.2"}
            ;; Electric Dependencies
          ;;   com.hyperfiddle/electric {:local/root "../vendors/electric"}
-           com.hyperfiddle/electric       {:git/url "https://github.com/hyperfiddle/electric" :git/sha "b32ac98df7d7ec87f225d47354671be172ffa87e"}
+           com.hyperfiddle/electric       {:git/url "https://github.com/hyperfiddle/electric" :git/sha "2795996813f2d92e4be0274e173e8b50e95acc73"}
            com.hyperfiddle/rcf            {:mvn/version "20220926-202227"}
            ring/ring                      {:mvn/version "1.11.0"} ; comes with Jetty
            org.clojure/clojure            {:mvn/version "1.12.0"}
