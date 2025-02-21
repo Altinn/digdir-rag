@@ -6,7 +6,7 @@
     "build:tailwind": "npx tailwindcss -i ./resources/input.css -o ./resources/public/chat_app/styles.css --minify"
   },
   "devDependencies": {
-    "shadow-cljs": "2.22.9",
+    "shadow-cljs": "2.28.20",
     "tailwindcss": "^3.4.14"
   },
   "dependencies": {
@@ -21,6 +21,6 @@
     "markdown-it-footnote": "^3.0.3",
     "markdown-it-texmath": "^0.9.1",
     "markdown-it-toc-done-right": "^4.2.0",
-    "punycode": "2.1.1"
+    "punycode": "2.3.1"
   }
 }
