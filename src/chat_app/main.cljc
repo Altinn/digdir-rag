@@ -3,7 +3,7 @@
             [chat-app.kit :as kit]
             [chat-app.rhizome :as rhizome]
             [services.openai :as openai]
-            #?(:clj [services.system :as system]) 
+            #?(:clj [services.system :as system])
             #?(:clj [models.db
                      :refer [delayed-connection
                              fetch-convo-messages-mapped
@@ -29,9 +29,12 @@
             [hyperfiddle.electric :as e]
             [hyperfiddle.electric-dom2 :as dom]
             [hyperfiddle.electric-ui4 :as ui]
-
+            [hyperfiddle.rcf :refer [tests tap %]]
+            
             [clojure.string :as str]
-            [markdown.core :as md2]))
+            [markdown.core :as md2]
+            ;; rag tests
+            #?(:clj [chat-app.rag-test])))
 
 (defn T
   "For debugging
@@ -57,6 +60,7 @@
 (e/def db) ; injected database ref; Electric defs are always dynamic
 (e/def auth-conn)
 
+(hyperfiddle.rcf/enable!)
 
 
 #?(:cljs (defonce !state (atom {:route nil})))

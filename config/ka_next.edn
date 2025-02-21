@@ -7,13 +7,13 @@
               :schema-flexibility :read}
       :remote {:store {:backend :jdbc
                        :dbtype "postgresql"
-                       :host "aws-0-eu-central-1.pooler.supabase.com"
+                       :host #env ADH_POSTGRES_HOST
                        :port 6543
                        :dbname "postgres"
                        :table #env ADH_POSTGRES_TABLE
                        :user #env ADH_POSTGRES_USER
                        :password #env ADH_POSTGRES_PWD
-                       :jdbcUrl "jdbc:postgresql://aws-0-eu-central-1.pooler.supabase.com:6543/postgres?pgbouncer=true&sslmode=require&prepareThreshold=0"}
+                       :jdbcUrl #env ADH_POSTGRES_URL}
                :schema-flexibility :read}
 
       :distributed {}}

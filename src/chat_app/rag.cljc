@@ -11,7 +11,8 @@
             #?(:clj [services.openai :as llm])
             #?(:clj [datahike.api :as d])
             #?(:clj [models.db :as db :refer [delayed-connection]])
-            #?(:clj [markdown.core :as md2])))
+            #?(:clj [markdown.core :as md2])
+            [lambdaisland.deep-diff2 :as ddiff]))
 (defn T
   "For debugging
   Input → ___ → Output
@@ -25,6 +26,15 @@
   ([tag x]
    (prn tag x)
    x))
+
+(defn print-diff [old new]
+  (-> (ddiff/diff old new)
+      ddiff/minimize
+      ddiff/pretty-print ;; Printing directly with
+                       ;; ddiff/pretty-print does not look
+                       ;; right
+      with-out-str
+      print))
 
 (def stage-name "DOCS_QA_RAG")
 
@@ -153,7 +163,7 @@
                                        (when (seq selected-options)
                                          (str field ":=[" 
                                               (clojure.string/join "," 
-                                              (map #(str "'" % "'") selected-options))
+                                              (map #(str "`" % "`") selected-options))
                                               "]"))))
                                 (remove nil?))]
        (when (seq selected-fields)
@@ -183,10 +193,11 @@
      "Converts a filter map to a Typesense multi-search with disjunctive faceting"
      [{:keys [fields max-options]} docs-collection-name]
      (let [all-field-names (map :field fields)
+           fields-with-selections (filter #(not-empty (:selected-options %)) fields)
 
-           ;; Helper function to create filter string
+           ;; Helper function to create filter string for selected options
            create-filter-str (fn [excluded-field]
-                               (->> fields
+                              (->> fields-with-selections
                                     (remove #(= (:field %) excluded-field))
                                     (map (fn [{:keys [field selected-options]}]
                                            (str field ":=[" 
@@ -196,312 +207,49 @@
                                     (clojure.string/join " && ")))
 
            ;; Main search with all filters and facets
+           all-facets (into {}
+                             (remove (fn [[_ v]] (#{"" nil} v)))
+                             (merge
+                              {:q "*"
+                               :query_by "doc_num"
+                               :facet_by (clojure.string/join "," all-field-names)
+                               :page 1
+                               :max_facet_values (or max-options 300)
+                               :per_page 6
+                               :collection docs-collection-name}
+                              ))
+           
+           ;; Main search with all filters and facets
            main-search (into {} 
                              (remove (fn [[_ v]] (#{"" nil} v)))
+                            (merge
                              {:q "*"
                               :query_by "doc_num"
                               :facet_by (clojure.string/join "," all-field-names)
                               :page 1
-                              :max_facet_values 300
+                               :max_facet_values (or max-options 300)
                               :per_page 6
-                              :collection docs-collection-name})
+                               :collection docs-collection-name}
+                              (when (seq fields-with-selections)
+                                {:filter_by (create-filter-str nil)})))
 
-           ;; Individual facet searches
+           ;; Individual facet searches - only for fields with selections
            facet-searches (map (fn [{:keys [field]}]
+                                (into {}
+                                      (remove (fn [[_ v]] (#{"" nil} v)))
+                                      (merge
                                  {:q "*"
                                   :query_by "doc_num"
                                   :facet_by field
                                   :page 1
-                                  :filter_by (create-filter-str field)
-                                  :max_facet_values 10
-                                  
-                                  :collection docs-collection-name})
-                               fields)] 
+                                         :max_facet_values (or max-options 300)
+                                         :collection docs-collection-name}
+                                        (when-let [filter-str (create-filter-str field)]
+                                          {:filter_by filter-str}))))
+                              fields-with-selections)]
 
-       {:searches (cons main-search facet-searches)})))
+       {:searches (vec (concat [all-facets main-search] facet-searches))})))
 
-
-(comment
-
-  
-  (def docs-collection-name "TEST_kudos_docs")
-
-  (def input-filter-maps
-    [;;
-     {:type :typesense
-      :max-options 30
-      :fields [{:type :multiselect
-                :selected-options #{"DFD"}
-                :field "orgs_short"}
-               {:type :multiselect
-                :selected-options #{}
-                :field "owner_short"}]}
-     {:type :typesense
-      :max-options 30
-      :fields [{:type :multiselect
-                :selected-options #{"DFD"}
-                :field "orgs_short"}
-               {:type :multiselect
-                :selected-options #{"Digdir"}
-                :field "owner_short"}]}
-     {:type :typesense
-      :max-options 30
-      :fields [{:type :multiselect
-                :selected-options #{"DFD","KDD"}
-                :field "orgs_short"}
-               {:type :multiselect
-                :selected-options #{"DFD"}
-                :field "owner_short"}
-               {:type :multiselect
-                :selected-options #{}
-                :field "publisher_short"}]}
-     {:type :typesense
-      :max-options 30
-      :fields [{:type :multiselect
-                :selected-options #{"DFD","KDD"}
-                :field "orgs_short"}
-               {:type :multiselect
-                :selected-options #{"Digdir","DFD"}
-                :field "owner_short"}
-               {:type :multiselect
-                :selected-options #{}
-                :field "publisher_short"}
-               {:type :multiselect
-                :selected-options #{"DFD"}
-                :field "recipient_short"}]}
-     {:type :typesense
-      :max-options 30
-      :fields [{:type :multiselect
-                :selected-options #{}
-                :field "orgs_short"}
-               {:type :multiselect
-                :selected-options #{}
-                :field "owner_short"}
-               {:type :multiselect
-                :selected-options #{}
-                :field "publisher_short"}
-               {:type :multiselect
-                :selected-options #{}
-                :field "recipient_short"}]}
-     ])
-
-  ;; (def output-search-config
-  ;;   (filter-map->typesense-facet-multi-search
-  ;;    input-filter-map
-  ;;    "KUDOS_docs_2024-12-10")) 
-  
-
-  (def target-search-config
-    [{:searches
-      [
-       ;; n 0
-       {:collection docs-collection-name,
-        :q "*",
-        :query_by "doc_num",
-        :facet_by "orgs_short,owner_short",
-        :filter_by "orgs_short:=[`DFD`]",
-        :max_facet_values 30,
-        :page 1,
-        :per_page 1}
-       {:collection docs-collection-name,
-        :q "*",
-        :query_by "doc_num",
-        :facet_by "orgs_short",
-        :max_facet_values 30,
-        :page 1
-        :per_page 1}]}
-     
-     ;; n 1
-     {:searches
-      [;;
-       {:collection docs-collection-name,
-        :q "*",
-        :query_by "doc_num",
-        :max_facet_values 30,
-        :page 1,
-        :per_page 1,
-        :facet_by "orgs_short,owner_short",
-        :filter_by "orgs_short:=[`DFD`] && owner_short:=[`Digdir`]"}
-       {:collection docs-collection-name,
-        :q "*",
-        :query_by "doc_num",
-        :max_facet_values 30,
-        :page 1,
-        :per_page 1
-        :facet_by "orgs_short"}]}
-     ;; n 2
-     {:searches
-      [{:q "*",
-        :query_by "doc_num",
-        :facet_by "orgs_short,owner_short,publisher_short",
-        :page 1,
-        :filter_by "orgs_short:=[`DFD`,`KDD`] && owner_short:=[`DFD`]",
-        :max_facet_values 10,
-        :per_page 6,
-        :collection docs-collection-name}
-       {:query_by "doc_num",
-        :highlight_full_fields "doc_num",
-        :collection docs-collection-name,
-        :q "*",
-        :facet_by "orgs_short",
-        :filter_by "owner_short:=[`DFD`]",
-        :page 1}
-       {:query_by "doc_num",
-        :highlight_full_fields "doc_num",
-        :collection docs-collection-name,
-        :q "*",
-        :facet_by "owner_short",
-        :filter_by "orgs_short:=[`DFD`,`KDD`]",
-        :page 1}]}
-     ;; n 3
-     {:searches
-      [{:q "*",
-        :query_by "doc_num",
-        :facet_by "orgs_short,owner_short,publisher_short,recipient_short",
-        :page 1,
-        :filter_by
-        "orgs_short:=[`DFD`,`KDD`] && owner_short:=[`DFD`,`Digdir`] && recipient_short:=[`DFD`]",
-        :max_facet_values 10,
-        :per_page 6,
-        :collection docs-collection-name}
-       {:query_by "doc_num",
-        :collection docs-collection-name,
-        :q "*",
-        :facet_by "orgs_short",
-        :filter_by
-        "owner_short:=[`DFD`,`Digdir`] && recipient_short:=[`DFD`]",
-        :max_facet_values 10,
-        :page 1}
-       {:query_by "doc_num",
-        :collection docs-collection-name,
-        :q "*",
-        :facet_by "owner_short",
-        :filter_by "orgs_short:=[`DFD`,`KDD`] && recipient_short:=[`DFD`]",
-        :max_facet_values 10,
-        :page 1}
-       {:query_by "doc_num",
-        :collection docs-collection-name,
-        :q "*",
-        :facet_by "recipient_short",
-        :filter_by
-        "orgs_short:=[`DFD`,`KDD`] && owner_short:=[`DFD`,`Digdir`]",
-        :max_facet_values 10,
-        :page 1}]}
-
-     ;; n 4
-     {:searches
-      [{:q "*",
-        :query_by "doc_num",
-        :facet_by "orgs_short,owner_short,publisher_short,recipient_short",
-        :page 1,
-        :filter_by
-        "orgs_short:=[`DFD`,`KDD`] && owner_short:=[`DFD`,`Digdir`] && recipient_short:=[`DFD`]",
-        :max_facet_values 10,
-        :per_page 6,
-        :collection docs-collection-name}
-       {:query_by "doc_num",
-        :collection docs-collection-name,
-        :q "*",
-        :facet_by "orgs_short",
-        :filter_by
-        "owner_short:=[`DFD`,`Digdir`] && recipient_short:=[`DFD`]",
-        :max_facet_values 10,
-        :page 1}
-       {:query_by "doc_num",
-        :collection docs-collection-name,
-        :q "*",
-        :facet_by "owner_short",
-        :filter_by "orgs_short:=[`DFD`,`KDD`] && recipient_short:=[`DFD`]",
-        :max_facet_values 10,
-        :page 1}
-       {:query_by "doc_num",
-        :collection docs-collection-name,
-        :q "*",
-        :facet_by "recipient_short",
-        :filter_by
-        "orgs_short:=[`DFD`,`KDD`] && owner_short:=[`DFD`,`Digdir`]",
-        :max_facet_values 10,
-        :page 1}]}])
-
-  (def n 0)
-
-  (= (filter-map->typesense-facet-multi-search
-      (nth input-filter-maps n)
-      docs-collection-name)
-     (nth target-search-config n))
-  
-  (def conversation-entity {:id "71e1adbe-2116-478d-92b8-40b10a612d7b"
-                             :name "Kunnskapsassistent - test"
-                             :image "kudos-logo.png"
-                             :docs-collection "TEST_kudos_docs"
-                             :chunks-collection "TEST_kudos_chunks"
-                             :phrases-collection "TEST_kudos_phrases"
-                             :phrase-gen-prompt "keyword-search"
-                             :reasoning-languages ["en" "no"]
-                             :prompt ""})
-  
-  (let [multi-search 
-        {:searches
-        [ {:q "*",
-           :query_by "doc_num",
-           :facet_by "orgs_short,owner_short",
-           :page 1,
-           :max_facet_values 10,
-           :per_page 6,
-           :collection "TEST_kudos_docs"}
-         {:q "*",
-          :query_by "doc_num",
-          :facet_by "orgs_short",
-          :page 1,
-          :filter_by "owner_short:=[]",
-          :max_facet_values 10,
-          :collection "TEST_kudos_docs"}
-         {:q "*",
-          :query_by "doc_num",
-          :facet_by "owner_short",
-          :page 1,
-          :filter_by "orgs_short:=[`DFD`]",
-          :max_facet_values 10,
-          :collection "TEST_kudos_docs"}]}
-
-        #_(filter-map->typesense-facet-multi-search
-                      (nth input-filter-maps n)
-                      (:docs-collection conversation-entity))]
-    (try
-      (let [results (:results (ts-client/multi-search ts-cfg multi-search {:query_by "doc_num"}))
-            opts (options results)]
-        results)
-      (catch Exception e
-        (println "Error in fetch-facets:" (.getMessage e) "Error: " (str e) "queries:" multi-search))))
-  
-  (ts-client/multi-search ts-cfg 
-   {:searches [ {:q "Instruks help", 
-                 :sort_by "_text_match:desc", :limit 20, 
-                 :exclude_fields "phrase_vec", 
-                 :filter_by "$KUDOS_docs_2024-12-10(type:=['Instruks'])", 
-                 :prioritize_exact_match false, :drop_tokens_threshold 5, 
-                 :include_fields "chunk_id,search_phrase", 
-                 :collection "KUDOS_phrases_2024-12-10"}]}
-   {:query_by "chunk_id"})
-  
-  (fetch-facets conversation-entity
-                (filter-map->typesense-facet-multi-search
-                 (nth input-filter-maps n)
-                 docs-collection-name))
-
-  )
-
-
-
-(comment
-  (mapv
-   (partial facet-result->ui-field filter-map)
-   (:results result))
-
-  (mapv
-   facet-result->ui-field
-   (:results result)
-   (repeat filter-map)))
 
 (defn rcomp [& fns]
   (apply comp (reverse fns)))
@@ -518,78 +266,32 @@
 #?(:clj 
    (defn options [res]
      (def options-input res)
-     ;; If there is no selection for a given field, we find the option
-     ;; data in all-facets, otherwise in rest-facets.
-     (let [fallback-field->counts (->> res first :facet_counts field->counts)
-           fallback-field->zero-counts (-> fallback-field->counts
-                                           (update-vals (partial mapv #(assoc % :count 0))))]
+     (let [all-facet-counts (mapcat :facet_counts res)
+           ;; Group by field_name first
+           grouped (group-by :field_name all-facet-counts)
+           ;; For each field_name, combine counts taking max count for each value
+           field->options
+           (reduce-kv
+            (fn [acc field-name field-entries]
+              (let [all-counts (mapcat :counts field-entries)
+                                  ;; Group counts by value and take max count for each
+                    combined-counts (->> all-counts
+                                         (group-by :value)
+                                         (map (fn [[value entries]]
+                                                (if (seq entries)
+                                                  {:value value
+                                                   :count (if (seq (rest entries))
+                                                            (apply max (map :count (rest entries)))
+                                                            0)}
+                                                  {:value value
+                                                   :count 0})))
+                                         (sort-by :value)
+                                         vec)]
+                (assoc acc field-name combined-counts)))
+            {}
+            grouped)]
+       field->options)))
 
-       (into {}
-             (map (fn [field-res]
-                    (let [{:as facet_counts
-                           :keys [field_name counts]} (get-in field-res [:facet_counts 0])]
-                      [field_name
-                       (->> (if (empty? counts)
-                              (fallback-field->counts field_name)
-                              (->>
-                               (merge (medley/index-by :value (fallback-field->zero-counts field_name))
-                                      (medley/index-by :value counts))
-                               vals))
-                            (sort-by :value)
-                            vec)])))
-             (rest res)))))
-
-
-
-(comment
-  (def test-entity {:id "71e1adbe-2116-478d-92b8-40b10a612d7b"
-                    :name "Kunnskapsassistent - DEV"
-                    :image "kudos-logo.png"
-                    :docs-collection "KUDOS_docs_2024-12-10" 
-                    :chunks-collection "KUDOS_chunks_2024-12-10" 
-                    :phrases-collection "KUDOS_phrases_2024-12-10" 
-                    :phrase-gen-prompt "keyword-search"
-                    :reasoning-languages ["en" "no"]
-                    :prompt ""})
-
-  ;; Base case: nothing selected
-  (= (->> (fetch-facets test-entity
-                        {:type :typesense
-                         :fields [{:type :multiselect
-                                   :expanded? true
-                                   :selected-options #{}
-                                   :field "type"}
-                                  {:type :multiselect
-                                   :expanded? true
-                                   :selected-options #{}
-                                   :field "orgs_short"}]})
-          :ui/fields
-          (mapv (juxt :field :options))
-          set)
-     #{["type" [{:count 32, :value "Tildelingsbrev", :selected? false} {:count 1, :value "Instruks", :selected? false} {:count 4, :value "Evaluering", :selected? false} {:count 10, :value "Årsrapport", :selected? false}]]
-      
-      ["orgs_short" [{:count 13, :value "Digdir", :selected? false} {:count 1, :value "NFD", :selected? false} {:count 32, :value "DFD", :selected? false} {:count 8, :value "DSB", :selected? false} {:count 1, :value "NGU", :selected? false} {:count 9, :value "KDD", :selected? false} {:count 8, :value "JD", :selected? false} {:count 1, :value "Statsforvalterens fellestjenester", :selected? false} {:count 1, :value "NFR", :selected? false} {:count 22, :value "Departementenes sikkerhets- og serviceorganisasjon", :selected? false}]]
-
-       })
-
-  (->> (fetch-facets test-entity
-                     {:type :typesense
-                      :fields [{:type :multiselect
-                                :expanded? true
-                                :selected-options #{"Tildelingsbrev"}
-                                :field "type"}
-                               {:type :multiselect
-                                :expanded? true
-                                :selected-options #{}
-                                :field "orgs_short"}]})
-       :ui/fields
-       (mapv (juxt :field :options))
-       set)
-
-  
-  
-  
-  )
 
 #?(:clj
    (defn facet-result->ui-field [{:as filter-field :keys [selected-options]} options]
@@ -604,13 +306,18 @@
    (defn fetch-facets [conversation-entity filter-map]
      (let [multi-search (filter-map->typesense-facet-multi-search
                          filter-map
-                         (:docs-collection conversation-entity))]
+                         (:docs-collection conversation-entity))
+          ;;  _ (prn-str "fetch-facets multi-search query: " multi-search)
+           ]
        (try
-         (let [results (:results (ts-client/multi-search ts-cfg multi-search {:query_by "doc_num"}))
+         (let [results (:results (ts-client/multi-search
+                                  ts-cfg multi-search {:query_by "doc_num"}))
                opts (options results)]
-           (assoc filter-map :ui/fields (mapv (fn [filter-field]
-                                                (facet-result->ui-field filter-field (opts (:field filter-field))))
-                                              (:fields filter-map))))
+           (assoc filter-map :ui/fields
+                  (mapv (fn [filter-field]
+                          (facet-result->ui-field
+                           filter-field (opts (:field filter-field))))
+                        (:fields filter-map))))
          (catch Exception e
            (println "Error in fetch-facets:" (.getMessage e) "Error: " (str e) "queries:" multi-search)
            filter-map)))))
