@@ -2,7 +2,7 @@
 FROM node:20-slim AS node-deps
 WORKDIR /app
 COPY package.json yarn.lock .yarnrc.yml .yarn ./
-RUN corepack enable && corepack prepare yarn@4.5.3 --activate && yarn install
+RUN corepack enable && corepack prepare yarn@4.6.0 --activate && yarn install
 
 # build stage
 ENV JAVA_TOOL_OPTIONS="-Xmx3g"
