@@ -20,7 +20,7 @@ RUN clojure -A:build:prod -M -e ::ok
 RUN clj -X:build:prod uberjar :build/jar-name app.jar
 
 # runtime stage
-FROM eclipse-temurin:21-jre-jammy
+FROM eclipse-temurin:21.0.6_7-jre-jammy
 WORKDIR /app
 COPY --from=build /app /app
 #COPY --from=build /app /app/resources/public/chat_app/js/manifest.edn
