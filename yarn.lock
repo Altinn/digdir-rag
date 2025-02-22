@@ -940,7 +940,7 @@ __metadata:
     markdown-it-footnote: "npm:^3.0.3"
     markdown-it-texmath: "npm:^0.9.1"
     markdown-it-toc-done-right: "npm:^4.2.0"
-    nanoid: "npm:^3.3.8"
+    nanoid: "npm:^5.0.9"
     punycode: "npm:2.3.1"
     shadow-cljs: "npm:2.28.21"
     tailwindcss: "npm:^3.4.17"
@@ -1898,12 +1898,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"nanoid@npm:^3.3.8":
-  version: 3.3.8
-  resolution: "nanoid@npm:3.3.8"
+"nanoid@npm:^5.0.9":
+  version: 5.1.0
+  resolution: "nanoid@npm:5.1.0"
   bin:
-    nanoid: bin/nanoid.cjs
-  checksum: 10c0/4b1bb29f6cfebf3be3bc4ad1f1296fb0a10a3043a79f34fbffe75d1621b4318319211cd420549459018ea3592f0d2f159247a6f874911d6d26eaaadda2478120
+    nanoid: bin/nanoid.js
+  checksum: 10c0/290af467e6b65ed1df7e7518674dad87ff46204d279be98549d5480b6fb0fc601d9abd3a3abb5ee2f0554b19883153c2979fee82f57a70ce00692e4f6beae2f8
   languageName: node
   linkType: hard
 
