@@ -1,17 +1,17 @@
 {:deps    {org.babashka/http-client {:mvn/version "0.3.11"}
-           org.clojure/data.json {:mvn/version "2.5.0"}
-           buddy/buddy-sign {:mvn/version "3.5.351"}
+           org.clojure/data.json {:mvn/version "2.5.1"}
+           buddy/buddy-sign {:mvn/version "3.6.1-359"}
            tick/tick {:mvn/version "1.0"}
            io.replikativ/datahike {:mvn/version "0.6.1594"}
            io.replikativ/datahike-jdbc {:mvn/version "0.3.49"}
-           org.postgresql/postgresql {:mvn/version "42.7.3"}
+           org.postgresql/postgresql {:mvn/version "42.7.5"}
            net.clojars.wkok/openai-clojure {:mvn/version "0.18.1"}
            nano-id/nano-id {:mvn/version "1.0.0"}
            aero/aero {:mvn/version "1.1.6"}
            io.github.nextjournal/markdown {:mvn/version "0.6.157"}
+           hiccup/hiccup {:mvn/version "2.0.0-RC4"}
+           markdown-clj/markdown-clj {:mvn/version "1.12.3"}
            io.github.lambdaisland/deep-diff2  {:git/sha "0c04153e30639e0c7776500f42083d9f6a38cf89"}
-           hiccup/hiccup {:mvn/version "2.0.0-RC3"}
-           markdown-clj/markdown-clj {:mvn/version "1.12.1"}
            clj-http/clj-http {:mvn/version "3.12.3"}
            io.github.runeanielsen/typesense-clj {:mvn/version "0.1.146"}
            dev.weavejester/medley {:mvn/version "1.8.1"}
@@ -25,10 +25,10 @@
            com.hyperfiddle/electric       {:git/url "https://github.com/hyperfiddle/electric" :git/sha "b32ac98df7d7ec87f225d47354671be172ffa87e"}
            com.hyperfiddle/rcf            {:mvn/version "20220926-202227"}
            ring/ring                      {:mvn/version "1.11.0"} ; comes with Jetty
-           org.clojure/clojure            {:mvn/version "1.12.0"}
-           org.clojure/clojurescript      {:mvn/version "1.11.121"}
+           org.clojure/clojure            {:mvn/version "1.12.0-alpha5"} ; later releases break Electric v2
+           org.clojure/clojurescript      {:mvn/version "1.11.132"}
            org.clojure/tools.logging      {:mvn/version "1.2.4"}
-           ch.qos.logback/logback-classic {:mvn/version "1.4.14"}}
+           ch.qos.logback/logback-classic {:mvn/version "1.5.16"}}
  :paths   ["src" "resources"]
  :aliases {:dev
            {:extra-paths ["src-dev"]

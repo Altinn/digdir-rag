@@ -21,6 +21,21 @@
 #?(:clj
    (def cfg (get-in config [:db (:db-env config)])))
 
+#?(:clj
+   (defn update-config [new-entity-config] 
+     (let [current-entities (get-in config [:chat :entities])
+           updated-entities (map #(if (= (:id %) (:id new-entity-config))
+                                    (merge % new-entity-config)
+                                    %)
+                                 current-entities)
+           updated-config (assoc-in config [:chat :entities] updated-entities)]
+       (if config-filename
+         (do
+           (println (str "Updated prompt config." updated-config))
+           (spit config-filename (pr-str updated-config)))
+         (do
+           (println "ENTITY_FILE_CONFIG not set, cannot save updates."))))))
+
 (def dh-schema
   [;; Folder
    {:db/ident :folder/id

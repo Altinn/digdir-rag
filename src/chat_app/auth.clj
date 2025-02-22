@@ -61,12 +61,16 @@
 
 (def secret "cd5e984eaf41-16f2b708-9af6-497f")
 
-(def domain-whitelist #{"@digdir.no" "@dfd.dep.no" "@dss.dep.no" "@dfo.no" "@digdir.cloud" "@itonomi.com"})
-
-(def admin-users #{"wd@itonomi.com" "bdb@itonomi.com" "olavfosse@itonomi.com"})
-
 (defn admin-user? [email]
-  (contains? admin-users email))
+  (let [admins-env (or (System/getenv "ADMIN_USER_EMAILS") "")
+        admins (set (map str/trim (str/split admins-env #" ")))]
+    (println "ADMIN_USER_EMAILS: " admins)
+    (contains? admins email)))
+
+(defn domain-whitelist [email]
+  (let [domains (set (map str/trim (str/split (or (System/getenv "ALLOWED_DOMAINS") "") #" ")))]
+    (println "ALLOWED_DOMAINS: " domains)
+    (contains? domains email)))
 
 (defn approved-domain? [email]
   (let [[_local-part domain] (str/split email #"@")]

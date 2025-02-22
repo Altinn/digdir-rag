@@ -6,6 +6,7 @@
             #?(:clj [services.system :as system])
             #?(:clj [models.db
                      :refer [delayed-connection
+                             update-config
                              fetch-convo-messages-mapped
                              fetch-convo-entity-id
                              fetch-user-id
@@ -165,6 +166,64 @@
                    (dom/img (dom/props {:src "icons/old/send.svg"}))
                    (dom/img (dom/props {:src "icons/circle-stop.svg"}))))))))))))
 
+(e/defn PromptEditor []
+  (e/client
+   (let [cfg entities-cfg
+         entity (when cfg (-> cfg :entities first))
+         {:keys [id promptRagGenerate promptRagQueryRelax]} (or entity {})
+         !promptRagGenerate (atom promptRagGenerate)
+         !promptRagQueryRelax (atom promptRagQueryRelax)
+         promptGenerate (e/watch !promptRagGenerate)
+         promptQueryRelax (e/watch !promptRagQueryRelax)]
+     (if-not entity
+       (dom/div (dom/text "Loading..."))
+       (dom/div
+        (dom/props {:class "m-2 h-full overflow-y-auto"})
+        (dom/h3 (dom/text "Query relax prompt:"))
+        (dom/div
+         (dom/textarea
+          (dom/props {:value (or promptQueryRelax "")
+                      :style {:width "94%"
+                              :height "200px"
+                              :font-family "monospace"
+                              :margin "10px"
+                              :padding "10px"
+                              :border "1px solid #ccc"
+                              :border-radius "4px"}
+                      :placeholder "Loading config file..."})
+          (dom/on "change" (e/fn [e]
+                             (when-some [v (not-empty (.. e -target -value))]
+                               (reset! !promptRagQueryRelax v)))))
+
+         (dom/h3 (dom/text "Generate prompt:"))
+         (dom/textarea
+          (dom/props {:value (or promptGenerate "")
+                      :style {:width "94%"
+                              :height "200px"
+                              :font-family "monospace"
+                              :margin "10px"
+                              :padding "10px"
+                              :border "1px solid #ccc"
+                              :border-radius "4px"}
+                      :placeholder "Loading config file..."})
+          (dom/on "change" (e/fn [e]
+                             (when-some [v (not-empty (.. e -target -value))]
+                               (reset! !promptRagGenerate v)))))
+         (dom/div (dom/props {:class (str "bottom-3" " absolute right-0 w-full border-transparent bg-gradient-to-b from-transparent via-white to-white pt-6 md:pt-2")})
+          (dom/button
+           (dom/on "click"
+                   (e/fn [_]
+                     (println "Saving prompts")
+                     (e/server
+                      (e/offload
+                       #(update-config
+                         {:id id
+                          :promptRagGenerate promptGenerate
+                          :promptRagQueryRelax promptQueryRelax}))
+                      nil)))
+           (dom/props {:class "px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none"})
+           (dom/text "Save changes")))))))))
+
 (e/defn BotMsg [msg-map]
   (e/client
     (let [conversation-entity (e/watch !conversation-entity)
@@ -173,41 +232,14 @@
           ;; _ (prn "msg: " msg-map)
           ]
       (dom/div (dom/props {:class "flex w-full flex-col items-start"})
-        (let [msg-hovered? (dom/Hovered?.)]
-          (dom/div (dom/props {:class "flex"})
-                   (dom/img (dom/props {:class "rounded-full w-8 h-8"
-                                        :src image}))
-                   #_(dom/div (dom/span (dom/text kind)))
-                   (dom/div (dom/props {:class "prose whitespace-pre-wrap px-4 pt-1 max-w-[600px]"}) 
-                            (case kind
-                              :kind/html (set! (.-innerHTML dom/node) text)
-                              :kind/markdown (set! (.-innerHTML dom/node) (md2/md-to-html-string text))
-                              (set! (.-innerHTML dom/node) (md2/md-to-html-string text)))))
-
-          #_(dom/div
-           (dom/props
-            {:class (str "msg-controls flex gap-1 mt-4 rounded bg-white border p-2"
-                         (if-not msg-hovered? " invisible" " visible "))})
-           (e/for-by identity [{:keys [title file-name action]}
-                               [#_{:title "Read aloud"
-                                 :action :read
-                                 :file-name "speech"}
-                                #_{:title "Copy"
-                                 :action :copy
-                                 :file-name "copy"}
-                                #_{:title "Regenerate"
-                                 :action :regenerate
-                                 :file-name "refresh-cw"}]]
-                     (ui/button (e/fn []
-                                  (case action
-                                    :copy (rhizome/copy-to-clipboard text)
-                                    :read (rhizome/speak-text text)
-                                    nil))
-                                (dom/props {:class (str "hover:bg-slate-200 rounded-full flex justify-center items-center w-8 h-8"
-                                                        (if-not msg-hovered?
-                                                          " invisible"
-                                                          " visible"))})
-                                (dom/img (dom/props {:class "w-4" :src (str "icons/" file-name ".svg")}))))))))))
+               (dom/div (dom/props {:class "flex"})
+                        (dom/img (dom/props {:class "rounded-full w-8 h-8"
+                                             :src image}))
+                        (dom/div (dom/props {:class "prose whitespace-pre-wrap px-4 pt-1 max-w-[600px]"})
+                                 (case kind
+                                   :kind/html (set! (.-innerHTML dom/node) text)
+                                   :kind/markdown (set! (.-innerHTML dom/node) (md2/md-to-html-string text))
+                                   (set! (.-innerHTML dom/node) (md2/md-to-html-string text)))))))))
 
 (e/defn UserMsg [msg]
   (e/client
@@ -704,31 +736,38 @@
                      (dom/div (dom/props {:class "flex flex-col justify-center items-center mt-8 select-none text-center opacity-50"})
                               (dom/img (dom/props {:src "icons/old/no-data.svg"}))
                               (dom/p (dom/text "No Data"))))))
-         (dom/div (dom/props {:class "flex flex-col items-center space-y-1 border-t border-white/20 pt-1 text-sm"})
-                  (let [stream? (e/server (e/watch !stream?))]
-                    #_(ui/button
-                     (e/fn [] (e/server (swap! !stream? not)))
-                     (dom/props {:class (str "px-4 py-2 rounded"
-                                             (if stream? " bg-blue-500" " bg-red-500"))})
-                     (dom/text "Stream message? " stream?)))
-                  (if-not clear-conversations?
-                    (ui/button
-                     (e/fn [] (reset! !clear-conversations? true))
-                     (dom/props {:class "flex w-full cursor-pointer select-none items-center gap-3 rounded-md py-3 px-3 text-[14px] leading-3 transition-colors duration-200 hover:bg-gray-500/10"})
-                     (dom/text "Clear conversations"))
-                    (dom/div (dom/props {:class "flex w-full cursor-pointer select-none items-center gap-3 rounded-md py-3 px-3 text-[14px] leading-3 transition-colors duration-200 hover:bg-gray-500/10"})
-                             (dom/img (dom/props {:src "icons/old/delete.svg"}))
-                             (dom/text "Are you sure?")
-                             (dom/div (dom/props {:class "right-1 z-10 flex text-gray-300"})
-                                      (ui/button (e/fn []
-                                                   (e/server (e/offload #(clear-all-conversations conn)) nil)
-                                                   (reset! !active-conversation nil)
-                                                   (reset! !clear-conversations? false))
-                                                 (dom/props {:class "min-w-[20px] p-1 text-neutral-400 hover:text-neutral-100"})
-                                                 (dom/img (dom/props {:src "icons/old/tick.svg"})))
-                                      (ui/button (e/fn [] (reset! !clear-conversations? false))
-                                                 (dom/props {:class "min-w-[20px] p-1 text-neutral-400 hover:text-neutral-100"})
-                                                 (dom/img (dom/props {:src "icons/old/x.svg"}))))))))))))
+         (dom/div
+          (dom/props {:class "flex flex-col items-center space-y-1 border-t border-white/20 pt-1 text-sm"})
+
+          (e/server
+           (let [user-token (auth/verify-token
+                             (get-in e/http-request [:cookies "auth-token" :value]))]
+             (e/client
+              #_(dom/p (dom/text (str "User: " (:user-id user-token))))
+              (when (e/server (auth/admin-user? (:user-id user-token)))
+                (ui/button
+                 (e/fn [] (reset! !view-main :edit-prompt))
+                 (dom/props {:class "flex w-full cursor-pointer select-none items-center gap-3 rounded-md py-3 px-3 text-[14px] leading-3 transition-colors duration-200 hover:bg-gray-500/10"})
+                 (dom/text "Edit prompts"))
+                
+                (if-not clear-conversations?
+                  (ui/button
+                   (e/fn [] (reset! !clear-conversations? true))
+                   (dom/props {:class "flex w-full cursor-pointer select-none items-center gap-3 rounded-md py-3 px-3 text-[14px] leading-3 transition-colors duration-200 hover:bg-gray-500/10"})
+                   (dom/text "Clear conversations"))
+                  (dom/div (dom/props {:class "flex w-full cursor-pointer select-none items-center gap-3 rounded-md py-3 px-3 text-[14px] leading-3 transition-colors duration-200 hover:bg-gray-500/10"})
+                           (dom/img (dom/props {:src "icons/old/delete.svg"}))
+                           (dom/text "Are you sure?")
+                           (dom/div (dom/props {:class "right-1 z-10 flex text-gray-300"})
+                                    (ui/button (e/fn []
+                                                 (e/server (e/offload #(clear-all-conversations conn)) nil)
+                                                 (reset! !active-conversation nil)
+                                                 (reset! !clear-conversations? false))
+                                               (dom/props {:class "min-w-[20px] p-1 text-neutral-400 hover:text-neutral-100"})
+                                               (dom/img (dom/props {:src "icons/old/tick.svg"})))
+                                    (ui/button (e/fn [] (reset! !clear-conversations? false))
+                                               (dom/props {:class "min-w-[20px] p-1 text-neutral-400 hover:text-neutral-100"})
+                                               (dom/img (dom/props {:src "icons/old/x.svg"}))))))))))))))))
 
 
 
@@ -933,7 +972,8 @@
                (case (e/watch !view-main)
                  :home (Home.)
                  :conversation (Conversation.)
-                 :dashboard (AuthAdminDashboard.))
+                 :dashboard (AuthAdminDashboard.)
+                 :edit-prompt (PromptEditor.))
                (when (e/watch debug/!debug?)
                  (debug/DBInspector. {:!active-conversation !active-conversation
                                       :!conversation-entity !conversation-entity}))))))
