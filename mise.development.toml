@@ -1,6 +1,0 @@
-[env]
-ENTITY_CONFIG_FILE='config/ka_dev.edn'
-# test-kunnskapsassistent
-ADH_POSTGRES_HOST='aws-0-eu-north-1.pooler.supabase.com'
-ADH_POSTGRES_URL='jdbc:postgresql://aws-0-eu-north-1.pooler.supabase.com:6543/postgres?pgbouncer=true&sslmode=require&prepareThreshold=0'
-ADH_POSTGRES_TABLE='dh_bb_dev' 
