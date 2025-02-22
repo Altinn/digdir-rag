@@ -178,35 +178,38 @@
      (if-not entity
        (dom/div (dom/text "Loading..."))
        (dom/div
-        (dom/text "Query relax prompt:")
+        (dom/props {:class "m-2 h-full overflow-y-auto"})
+        (dom/h3 (dom/text "Query relax prompt:"))
         (dom/div
          (dom/textarea
           (dom/props {:value (or promptQueryRelax "")
                       :style {:width "94%"
-                              :height "400px"
+                              :height "200px"
                               :font-family "monospace"
                               :margin "10px"
-                              :padding "10px"}
+                              :padding "10px"
+                              :border "1px solid #ccc"
+                              :border-radius "4px"}
                       :placeholder "Loading config file..."})
           (dom/on "change" (e/fn [e]
                              (when-some [v (not-empty (.. e -target -value))]
                                (reset! !promptRagQueryRelax v)))))
 
-         (dom/text "Generate prompt:")
+         (dom/h3 (dom/text "Generate prompt:"))
          (dom/textarea
           (dom/props {:value (or promptGenerate "")
                       :style {:width "94%"
-                              :height "400px"
+                              :height "200px"
                               :font-family "monospace"
                               :margin "10px"
-                              :padding "10px"}
+                              :padding "10px"
+                              :border "1px solid #ccc"
+                              :border-radius "4px"}
                       :placeholder "Loading config file..."})
           (dom/on "change" (e/fn [e]
                              (when-some [v (not-empty (.. e -target -value))]
                                (reset! !promptRagGenerate v)))))
-         (dom/div
-          (dom/props {:style {:margin-top "10px"}})
-
+         (dom/div (dom/props {:class (str "bottom-3" " absolute right-0 w-full border-transparent bg-gradient-to-b from-transparent via-white to-white pt-6 md:pt-2")})
           (dom/button
            (dom/on "click"
                    (e/fn [_]
@@ -218,6 +221,7 @@
                           :promptRagGenerate promptGenerate
                           :promptRagQueryRelax promptQueryRelax}))
                       nil)))
+           (dom/props {:class "px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none"})
            (dom/text "Save changes")))))))))
 
 (e/defn BotMsg [msg-map]
@@ -735,28 +739,35 @@
          (dom/div
           (dom/props {:class "flex flex-col items-center space-y-1 border-t border-white/20 pt-1 text-sm"})
 
-          (ui/button 
-           (e/fn [] (reset! !view-main :edit-prompt))
-           (dom/text "Edit prompts"))
-
-          (if-not clear-conversations?
-            (ui/button
-             (e/fn [] (reset! !clear-conversations? true))
-             (dom/props {:class "flex w-full cursor-pointer select-none items-center gap-3 rounded-md py-3 px-3 text-[14px] leading-3 transition-colors duration-200 hover:bg-gray-500/10"})
-             (dom/text "Clear conversations"))
-            (dom/div (dom/props {:class "flex w-full cursor-pointer select-none items-center gap-3 rounded-md py-3 px-3 text-[14px] leading-3 transition-colors duration-200 hover:bg-gray-500/10"})
-                     (dom/img (dom/props {:src "icons/old/delete.svg"}))
-                     (dom/text "Are you sure?")
-                     (dom/div (dom/props {:class "right-1 z-10 flex text-gray-300"})
-                              (ui/button (e/fn []
-                                           (e/server (e/offload #(clear-all-conversations conn)) nil)
-                                           (reset! !active-conversation nil)
-                                           (reset! !clear-conversations? false))
-                                         (dom/props {:class "min-w-[20px] p-1 text-neutral-400 hover:text-neutral-100"})
-                                         (dom/img (dom/props {:src "icons/old/tick.svg"})))
-                              (ui/button (e/fn [] (reset! !clear-conversations? false))
-                                         (dom/props {:class "min-w-[20px] p-1 text-neutral-400 hover:text-neutral-100"})
-                                         (dom/img (dom/props {:src "icons/old/x.svg"}))))))))))))
+          (e/server
+           (let [user-token (auth/verify-token
+                             (get-in e/http-request [:cookies "auth-token" :value]))]
+             (e/client
+              #_(dom/p (dom/text (str "User: " (:user-id user-token))))
+              (when (e/server (auth/admin-user? (:user-id user-token)))
+                (ui/button
+                 (e/fn [] (reset! !view-main :edit-prompt))
+                 (dom/props {:class "flex w-full cursor-pointer select-none items-center gap-3 rounded-md py-3 px-3 text-[14px] leading-3 transition-colors duration-200 hover:bg-gray-500/10"})
+                 (dom/text "Edit prompts"))
+                
+                (if-not clear-conversations?
+                  (ui/button
+                   (e/fn [] (reset! !clear-conversations? true))
+                   (dom/props {:class "flex w-full cursor-pointer select-none items-center gap-3 rounded-md py-3 px-3 text-[14px] leading-3 transition-colors duration-200 hover:bg-gray-500/10"})
+                   (dom/text "Clear conversations"))
+                  (dom/div (dom/props {:class "flex w-full cursor-pointer select-none items-center gap-3 rounded-md py-3 px-3 text-[14px] leading-3 transition-colors duration-200 hover:bg-gray-500/10"})
+                           (dom/img (dom/props {:src "icons/old/delete.svg"}))
+                           (dom/text "Are you sure?")
+                           (dom/div (dom/props {:class "right-1 z-10 flex text-gray-300"})
+                                    (ui/button (e/fn []
+                                                 (e/server (e/offload #(clear-all-conversations conn)) nil)
+                                                 (reset! !active-conversation nil)
+                                                 (reset! !clear-conversations? false))
+                                               (dom/props {:class "min-w-[20px] p-1 text-neutral-400 hover:text-neutral-100"})
+                                               (dom/img (dom/props {:src "icons/old/tick.svg"})))
+                                    (ui/button (e/fn [] (reset! !clear-conversations? false))
+                                               (dom/props {:class "min-w-[20px] p-1 text-neutral-400 hover:text-neutral-100"})
+                                               (dom/img (dom/props {:src "icons/old/x.svg"}))))))))))))))))
 
 
 
