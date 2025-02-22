@@ -20,6 +20,7 @@
     "markdown-it-footnote": "^3.0.3",
     "markdown-it-texmath": "^0.9.1",
     "markdown-it-toc-done-right": "^4.2.0",
+    "nanoid": "^3.3.8",
     "punycode": "2.3.1"
   }
 }
