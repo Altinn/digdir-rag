@@ -1001,7 +1001,7 @@ __metadata:
     markdown-it-texmath: "npm:^0.9.1"
     markdown-it-toc-done-right: "npm:^4.2.0"
     punycode: "npm:2.3.1"
-    shadow-cljs: "npm:2.28.20"
+    shadow-cljs: "npm:2.28.21"
     tailwindcss: "npm:^3.4.14"
   languageName: unknown
   linkType: soft
@@ -2660,9 +2660,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"shadow-cljs@npm:2.28.20":
-  version: 2.28.20
-  resolution: "shadow-cljs@npm:2.28.20"
+"shadow-cljs@npm:2.28.21":
+  version: 2.28.21
+  resolution: "shadow-cljs@npm:2.28.21"
   dependencies:
     node-libs-browser: "npm:^2.2.1"
     readline-sync: "npm:^1.4.7"
@@ -2672,7 +2672,7 @@ __metadata:
     ws: "npm:^7.4.6"
   bin:
     shadow-cljs: cli/runner.js
-  checksum: 10c0/f4aaa5127ffd7b717f00fec0b3e1d01df5f31effbaa741e4980a87432783d09a400807c39e3dcaeb4d7b3c13f432f55e96ead22291a9b90d437c8994d72fb2c2
+  checksum: 10c0/a680435fbcc35bc7b66300ecda5c4da02ff9f0a051f515a532de97337eb8fa6deb8c271d047c76bc71a97df0960bdb6ab612050444f598264b577dc92e312035
   languageName: node
   linkType: hard
 
