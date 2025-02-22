@@ -694,7 +694,13 @@
                                       (md2/md-to-html-string content-markdown))
                                     "\n\n</details>\n"))))
                               (clojure.string/join "\n"))
-           formatted-message (str "<details><summary>Relevante kilder</summary>\n" loaded-chunks "\n</details>")
+           formatted-message (str "<details><summary>Relevante kilder</summary>\n"
+                                  loaded-chunks
+                                  "\n</details>"
+                                  "\n<details>\n<summary>Nøkkelord</summary>"
+                                  (clojure.string/join ", " (map #(str "\"" % "\"")
+                                                                 extract-search-queries))
+                                  "\n</details>")
            _ (println "done formatting retrieved chunks.")
 
            _ (println "starting to rerank chunks...")
