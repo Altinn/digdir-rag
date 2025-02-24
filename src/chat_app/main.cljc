@@ -5,7 +5,7 @@
             [services.openai :as openai]
             #?(:clj [services.system :as system])
             #?(:clj [models.db
-                     :refer [delayed-connection
+                     :refer [delayed-connection 
                              update-config
                              fetch-convo-messages-mapped
                              fetch-convo-entity-id
@@ -53,11 +53,8 @@
 
 #?(:clj (defonce conn @delayed-connection))
 
-(e/def config-filename (e/server (System/getenv "ENTITY_CONFIG_FILE")))
 (e/def entities-cfg 
-  (e/server
-   (let [_ (println (str "reading config from file: " config-filename))]
-     (:chat (aero/read-config config-filename)))))
+  (e/server (:chat (e/watch db/!config))))
 (e/def db) ; injected database ref; Electric defs are always dynamic
 (e/def auth-conn)
 
