@@ -24,3 +24,5 @@ node_modules
 
 **/secrets.edn
 **/mise.*.local.toml
+
+config/ka_dev.edn
