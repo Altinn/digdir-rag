@@ -14,7 +14,9 @@
                        :user #env ADH_POSTGRES_USER
                        :password #env ADH_POSTGRES_PWD
                        :jdbcUrl #env ADH_POSTGRES_URL}
-               :schema-flexibility :read}
+               :schema-flexibility :read
+               :keep-history? false
+               }
 
       :distributed {}}
  :chat {:all-entities-image "bot.svg"
