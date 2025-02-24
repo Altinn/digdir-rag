@@ -12,29 +12,39 @@
 #?(:clj
    (def config-filename (System/getenv "ENTITY_CONFIG_FILE")))
 
+
 #?(:clj
-   (def config
+   (defn load-config []
      (let [_ (println (str "reading config from file: " config-filename))]
        (if config-filename
          (aero/read-config config-filename)
          (println (str "ENTITY_CONFIG_FILE env variable empty, unable to load config. This is expected during builds."))))))
+
 #?(:clj
-   (def cfg (get-in config [:db (:db-env config)])))
+   (def !config (atom (load-config))))
+
+#?(:clj
+   (defn config [] @!config))
+
+
+#?(:clj
+   (def cfg (get-in (config) [:db (:db-env (config))])))
 
 #?(:clj
    (defn update-config [new-entity-config] 
-     (let [current-entities (get-in config [:chat :entities])
+     (let [current-config (config)
+           current-entities (get-in current-config [:chat :entities])
            updated-entities (map #(if (= (:id %) (:id new-entity-config))
                                     (merge % new-entity-config)
                                     %)
                                  current-entities)
-           updated-config (assoc-in config [:chat :entities] updated-entities)]
-       (if config-filename
-         (do
-           (println (str "Updated prompt config." updated-config))
-           (spit config-filename (pr-str updated-config)))
-         (do
-           (println "ENTITY_FILE_CONFIG not set, cannot save updates."))))))
+           updated-config (assoc-in current-config [:chat :entities] updated-entities)]
+       (when config-filename
+         (println "Updating config file...")
+         (spit config-filename (pr-str updated-config))
+         (reset! !config updated-config)
+         (println "Config updated successfully."))
+       updated-config)))
 
 (def dh-schema
   [;; Folder
@@ -467,8 +477,8 @@
 ;; Database migration scripts
   (require '[datahike.migrate :refer [export-db import-db]])
 
-  (def local-cfg (get-in config [:db :local]))
-  (def remote-cfg (get-in config [:db :remote]))
+  (def local-cfg (get-in (config) [:db :local]))
+  (def remote-cfg (get-in (config) [:db :remote]))
 
   (def create-local-db (when-not (d/database-exists? local-cfg) (d/create-database local-cfg)))
 
