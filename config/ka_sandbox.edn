@@ -16,17 +16,16 @@
                        :jdbcUrl #env ADH_POSTGRES_URL}
                :schema-flexibility :read
                :keep-history? false
-        ;;        :allow-unsafe-config true  ;; USE to allow for table name changes
                }
 
       :distributed {}}
  :chat {:all-entities-image "bot.svg"
         :entities [{:id "71e1adbe-2116-478d-92b8-40b10a612d7b"
-                    :name "Kunnskapsassistent - NEXT"
+                    :name "Kunnskapsassistent - SANDBOX"
                     :image "kudos-logo.png"
-                    :docs-collection "NEXT_kudos_docs"
-                    :chunks-collection "NEXT_kudos_chunks"
-                    :phrases-collection "NEXT_kudos_phrases"
+                    :docs-collection "TEST_kudos_docs"
+                    :chunks-collection "TEST_kudos_chunks"
+                    :phrases-collection "TEST_kudos_phrases"
                     :phrase-gen-prompt "keyword-search"
                     :promptRagQueryRelax "You have access to a search API that returns relevant documentation.\nYour task is to generate an array of up to 7 search queries that are relevant to this question. Use a variation of related keywords and synonyms for the queries, trying to be as general as possible.\nInclude as many queries as you can think of, including and excluding terms. For example, include queries like ['keyword_1 keyword_2', 'keyword_1', 'keyword_2']. Be creative. The more queries you include, the more likely you are to find relevant results.\n"
                     :promptRagGenerate
