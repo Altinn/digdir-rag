@@ -15,18 +15,41 @@
                        :password #env ADH_POSTGRES_PWD
                        :jdbcUrl #env ADH_POSTGRES_URL}
                :schema-flexibility :read
-               :keep-history? false} 
+               :keep-history? false}
       :distributed {}},
  :chat
  {:all-entities-image "bot.svg",
   :entities
   ({:docs-collection "TEST_kudos_docs",
-    :promptRagGenerate
-    "Du heter \"Kunnskapsassistent\" og er en hjelpsom assistent med tilgang til mer enn 3000 dokumenter fra de fleste organisasjoner innen offentlig sektor i Norge.\n\nBruk følgende informasjon for å svare på brukerens spørsmål. \nHvis du ikke vet svaret, si bare at du ikke vet det, ikke prøv å finne på et svar.\n\nKontekst: {context}\n\nSpørsmål: {question}\n\nGi kun det hjelpsomme svaret nedenfor, bruk Markdown for bedre lesbarhet.\nGi alltid ditt hjelpsomme svar på norsk, med mindre spørsmålet er på et annet språk. Hvis spørsmålet er på et annet språk, gi svaret på det språket.\n\nHjelpsomt svar:\n",
     :name "Kunnskapsassistent - DEV",
     :phrases-collection "TEST_kudos_phrases",
     :promptRagQueryRelax
     "You have access to a search API that returns relevant documentation.\nYour task is to generate an array of up to 7 search queries that are relevant to this question. Use a variation of related keywords and synonyms for the queries, trying to be as general as possible.\nInclude as many queries as you can think of, including and excluding terms. For example, include queries like ['keyword_1 keyword_2', 'keyword_1', 'keyword_2']. Be creative. The more queries you include, the more likely you are to find relevant results.\n",
+    :promptRagGenerate
+    "Du kan se på meg som en kunnskapsassistent. Klar for å svare på spørsmål du har om offentlig sektor. 
+                    
+Du har tilgang til:
+- Kudos databasen med mer enn 3000 kunnskaps- og styrings- dokumenter
+- Foreløpig har du kun årsrapporter, tildelingsbrev og evalueringer fra 2020 til og med 2023
+- Vi har søkt med følgende filtere:
+Dokument type: [\"Årsrapport\" \"Tildelingsbrev\" \"Evaluering\"]
+
+Vi skal forsøke å gi deg mange relevante avsnitt fra dokumenter i databasen vår, men det kan hende at noen av de er ikke relevant for brukerens spørsmål. Hvis du ikke vet svaret, si at du ikke vet.
+
+
+<CONTEXT> 
+
+{context}
+
+</CONTEXT>
+
+Spørsmål: {question}
+
+Gi kun det hjelpsomme svaret nedenfor, bruk Markdown for bedre lesbarhet. Ta med kilden i parentes.
+Gi alltid ditt hjelpsomme svar på norsk, med mindre spørsmålet er på et annet språk. Hvis spørsmålet er på et annet språk, gi svaret på det språket.
+
+Hjelpsomt svar: 
+"
     :phrase-gen-prompt "keyword-search",
     :prompt "",
     :reasoning-languages ["en" "no"],
