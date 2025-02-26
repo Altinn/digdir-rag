@@ -97,7 +97,7 @@
                (if (llm/use-azure-openai)
                  (openai/create-chat-completion
                   {:model (env-var "AZURE_OPENAI_DEPLOYMENT_NAME")
-                   :messages [{:role "system" :content "You are a helpful assistant. Reply with supplied JSON format."}
+                   :messages [{:role "system" :content prompt}
                               {:role "user" :content (str "[User query]\n" user-input)}]
                    :tools search-results-tools
                    :tool_choice {:type "function"
@@ -113,7 +113,7 @@
                    })
                  (openai/create-chat-completion
                   {:model (env-var "OPENAI_API_MODEL_NAME")
-                   :messages [{:role "system" :content "You are a helpful assistant. Reply with supplied JSON format."}
+                   :messages [{:role "system" :content prompt}
                               {:role "user" :content (str "[User query]\n" user-input)}]
                    :tools search-results-tools
                    :tool_choice {:type "function"
@@ -141,7 +141,8 @@
 
    (defn query-relaxation [user-input & [prompt-rag-query-relax]]
      (let [max-retries 5
-           retry-delay 500] ; 1 second delay between retries
+           retry-delay 500 ;; ms 
+           ]
        (loop [attempt 1]
          (let [result (try
                         (do-query-relaxation user-input prompt-rag-query-relax)
