@@ -12,7 +12,7 @@
            hiccup/hiccup {:mvn/version "2.0.0-RC4"}
            markdown-clj/markdown-clj {:mvn/version "1.12.3"}
            io.github.lambdaisland/deep-diff2  {:git/sha "0c04153e30639e0c7776500f42083d9f6a38cf89"}
-           clj-http/clj-http {:mvn/version "3.12.3"}
+           clj-http/clj-http {:mvn/version "3.13.0"}
            io.github.runeanielsen/typesense-clj {:mvn/version "0.1.146"}
            dev.weavejester/medley {:mvn/version "1.8.1"}
            cheshire/cheshire {:mvn/version "5.13.0"}
