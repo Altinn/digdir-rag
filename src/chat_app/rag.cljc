@@ -655,7 +655,10 @@
            _ (println "done transacting user message.")
 
            messages (vec (db/fetch-convo-messages-mapped @!dh-conn convo-id))
-           filter-by (-> (last messages) :message.filter/value)
+
+           filter-messages (filterv #(some? (:message.filter/value %)) messages)
+
+           filter-by (-> (last filter-messages) :message.filter/value)
 
            retrieval-prompt-msg (first (filter #(and (= :user (:message/role %))
                                                      (= :agent (:message/voice %))
