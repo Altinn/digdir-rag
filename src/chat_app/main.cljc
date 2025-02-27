@@ -676,7 +676,7 @@
                        first
                        :id)
          new-convo-id 
-         (e/offload #(db/transact-new-msg-thread2 db/conn
+         (e/offload #(db/transact-new-msg-thread db/conn
                                                   (-> entities-cfg
                                                       :entities
                                                       first

@@ -258,19 +258,16 @@
 
 ;; Transactions
 #?(:clj
-   (defn transact-user-msg [conn {:keys [new-convo? convo-id user-query entity-id voice]}]
-             ;TODO: 
-             ; - handle passing this the db connection
-             ; - create error when transacting to an existing conversation without a convo-id or the convo-id being present in the db 
+   (defn transact-user-msg [conn convo-id user-query]
      (let [time-point (System/currentTimeMillis)
            tx-data {:conversation/id convo-id
-                    :conversation/messages {:message/id (nano-id)
-                                            :message/text user-query
-                                            :message/role :user
-                                            :message/voice (or voice :user)
-                                            :message/completion true
-                                            :message/kind :kind/markdown
-                                            :message/created time-point}}
+                    :conversation/messages [{:message/id (nano-id)
+                                              :message/text user-query
+                                              :message/role :user
+                                              :message/voice :user
+                                              :message/completion true
+                                              :message/kind :kind/markdown
+                                              :message/created time-point}]}
            _ (prn "transact-user-msg called for query: " user-query)]
        (d/transact conn [tx-data]))))
 
@@ -285,35 +282,10 @@
                                                  :message/kind :kind/markdown
                                                  :message/created (System/currentTimeMillis)}]}])))
 
-#?(:clj
-   (defn transact-new-msg-thread [conn {:keys [convo-id user-query entity-id]}]
-     (let [time-point (System/currentTimeMillis)
-           tx-data
-           {:conversation/id convo-id
-            :conversation/entity-id entity-id
-            :conversation/topic user-query
-            :conversation/created time-point
-            :conversation/system-prompt "sys-prompt"
-            :conversation/messages [{:message/id (nano-id)
-                                     :message/text "You are a helpful assistant."
-                                     :message/role :system
-                                     :message/voice :agent
-                                     :message/completion true
-                                     :message/kind :kind/text
-                                     :message/created time-point}
-                                    {:message/id (nano-id)
-                                     :message/text user-query
-                                     :message/role :user
-                                     :message/voice :user
-                                     :message/completion false
-                                     :message/kind :kind/markdown
-                                     :message/created (inc time-point)}]}
-           _ (prn "transact-new-msg-thread called for query: " user-query)]
-       (d/transact conn [tx-data]))))
 
-(defn transact-retrieval-prompt [conn convo-id prompt]
+(defn transact-retrieval-prompt [conn convo-id message-id prompt]
   (d/transact conn [{:conversation/id convo-id
-                     :conversation/messages [{:message/id (nano-id)
+                     :conversation/messages [{:message/id (if (nil? message-id) (nano-id) message-id)
                                               :message/text prompt
                                               :message/role :user
                                               :message/voice :agent
@@ -321,15 +293,15 @@
                                               :message/kind :kind/markdown
                                               :message/created (System/currentTimeMillis)}]}]))
 
-(defn transact-retrieved-sources [conn convo-id formatted-msg]
+(defn transact-retrieved-sources [conn convo-id message-id formatted-msg]
   (d/transact conn [{:conversation/id convo-id
-                         :conversation/messages [{:message/id (nano-id)
-                                                  :message/text formatted-msg
-                                                  :message/role :system
-                                                  :message/voice :assistant
-                                                  :message/completion false ;; this message doesn't get sent to the llm
-                                                  :message/kind :kind/html
-                                                  :message/created (System/currentTimeMillis)}]}]))
+                     :conversation/messages [{:message/id (if (nil? message-id) (nano-id) message-id)
+                                              :message/text formatted-msg
+                                              :message/role :system
+                                              :message/voice :assistant
+                                              :message/completion false ;; this message doesn't get sent to the llm
+                                              :message/kind :kind/html
+                                              :message/created (System/currentTimeMillis)}]}]))
 
 (defn create-folder [conn]
   (d/transact conn [{:folder/id (nano-id)
@@ -364,7 +336,7 @@
     (d/transact conn retraction-ops)))
 
 #?(:clj
-   (defn transact-new-msg-thread2 [conn entity-id]
+   (defn transact-new-msg-thread [conn entity-id]
      (let [convo-id (nano-id)
            time-point (System/currentTimeMillis)
            tx-data
@@ -400,7 +372,7 @@
                                                         :field "source_published_year"}]}
                                              
                                              )}]}
-           _ (prn "transact-new-msg-thread2 called" )]
+           _ (prn "transact-new-msg-thread called" )]
        (d/transact conn [tx-data])
        {:conversation-id convo-id})))
 
