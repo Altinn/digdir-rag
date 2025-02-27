@@ -37,7 +37,7 @@
                           io.github.clojure/tools.build {:mvn/version "0.9.6"
                                                          :exclusions  [com.google.guava/guava  ; Guava version conflict between tools.build and clojurescript.
                                                                        org.slf4j/slf4j-nop]}}} ; clashes with app logger
-           :cider-clj {:extra-deps {cider/cider-nrepl {:mvn/version "0.50.2"}}
+           :cider-clj {:extra-deps {cider/cider-nrepl {:mvn/version "0.52.1"}}
                        :main-opts ["-m" "nrepl.cmdline" "--middleware" "[cider.nrepl/cider-middleware]"]}
            :prod
            {:extra-paths ["src-prod"]}
