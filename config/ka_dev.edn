@@ -24,7 +24,16 @@
     :name "Kunnskapsassistent - DEV",
     :phrases-collection "TEST_kudos_phrases",
     :promptRagQueryRelax
-    "You have access to a search API that returns relevant documentation.\nYour task is to generate an array of up to 7 search queries that are relevant to this question. Use a variation of related keywords and synonyms for the queries, trying to be as general as possible.\nInclude as many queries as you can think of, including and excluding terms. For example, include queries like ['keyword_1 keyword_2', 'keyword_1', 'keyword_2']. Be creative. The more queries you include, the more likely you are to find relevant results.\n",
+    "You have access to a search API that returns relevant documentation. 
+Your task is to generate an array of up to 7 search queries that are relevant to the current state of the conversation provided below. 
+
+Use a variation of related keywords and synonyms for the queries, trying to be as general as possible.
+Include as many queries as you can think of, including and excluding terms. For example, include queries like [\"keyword_1 keyword_2\", \"keyword_1\", \"keyword_2\"]. Be creative. The more queries you include, the more likely you are to find relevant results.
+
+<CONVERSATION>
+{messages}
+</CONVERSATION>
+",
     :promptRagGenerate
     "Du kan se på meg som en kunnskapsassistent. Klar for å svare på spørsmål du har om offentlig sektor. 
                     

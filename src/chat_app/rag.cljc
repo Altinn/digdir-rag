@@ -85,11 +85,20 @@
 
 #?(:clj
    (defn do-query-relaxation
-     [user-input & [prompt-rag-query-relax]]
-     (let [prompt (or prompt-rag-query-relax "")
-           query-result (atom nil)
-           _ (prn "user-input:" user-input)]
-       (println (str stage-name " model name: " (env-var "OPENAI_API_MODEL_NAME")))
+     [prompt-rag-query-relax messages]
+     (let [query-result (atom nil)
+           formatted-messages
+           (map (fn [msg]
+                  (str (if (= (:message/role msg) :user) "User: " "Assistant: ")
+                       "\"" (:message/text msg) "\""))
+                messages)
+           message-string (clojure.string/join "\n\n" formatted-messages)
+           _ (println "Formatted messages:")
+           _ (println message-string)
+           
+           prompt (-> (or prompt-rag-query-relax "")
+                      (str/replace "{messages}" message-string))]
+
        #_(when (= (env-var "LOG_LEVEL") "debug")
            (println (str "prompt.rag.queryRelax: \n" prompt)))
 
@@ -97,8 +106,7 @@
                (if (llm/use-azure-openai)
                  (openai/create-chat-completion
                   {:model (env-var "AZURE_OPENAI_DEPLOYMENT_NAME")
-                   :messages [{:role "system" :content "You are a helpful assistant. Reply with supplied JSON format."}
-                              {:role "user" :content (str "[User query]\n" user-input)}]
+                   :messages [{:role "user" :content prompt}]
                    :tools search-results-tools
                    :tool_choice {:type "function"
                                  :function {:name "searchPhrases"}}
@@ -113,8 +121,7 @@
                    })
                  (openai/create-chat-completion
                   {:model (env-var "OPENAI_API_MODEL_NAME")
-                   :messages [{:role "system" :content "You are a helpful assistant. Reply with supplied JSON format."}
-                              {:role "user" :content (str "[User query]\n" user-input)}]
+                   :messages [{:role "user" :content prompt}]
                    :tools search-results-tools
                    :tool_choice {:type "function"
                                  :function {:name "searchPhrases"}}
@@ -139,12 +146,13 @@
 
 #?(:clj
 
-   (defn query-relaxation [user-input & [prompt-rag-query-relax]]
+   (defn query-relaxation [prompt-rag-query-relax messages]
      (let [max-retries 5
-           retry-delay 500] ; 1 second delay between retries
+           retry-delay 500 ;; ms 
+           ]
        (loop [attempt 1]
          (let [result (try
-                        (do-query-relaxation user-input prompt-rag-query-relax)
+                        (do-query-relaxation prompt-rag-query-relax messages)
                         (catch Exception e
                           (println "Error in do-query-relaxation attempt" attempt ":" (.getMessage e))
                           nil))]
@@ -640,16 +648,46 @@
            ;;                               :translation 0}) 
            ;;  _ (println "rag-pipeline input params: " params)
            convo-id (:conversation-id params)
-           _ (println "starting to transact new msg thread...")
-           _ (db/transact-new-msg-thread !dh-conn {:convo-id convo-id
-                                                   :user-query (:original_user_query params)
-                                                   :entity-id (:entity-id params)})
-           _ (println "done transacting new msg thread.")
+           
+           ;; conversation always exists
+           _ (println "starting to transact user message...")
+           _ (db/transact-user-msg !dh-conn convo-id (:original_user_query params))
+           _ (println "done transacting user message.")
+
+           messages (vec (db/fetch-convo-messages-mapped @!dh-conn convo-id))
+
+           filter-messages (filterv #(some? (:message.filter/value %)) messages)
+
+           filter-by (-> (last filter-messages) :message.filter/value)
+
+           retrieval-prompt-msg (first (filter #(and (= :user (:message/role %))
+                                                     (= :agent (:message/voice %))
+                                                     (= true (:message/completion %))
+                                                     (= :kind/markdown (:message/kind %)))
+                                               messages))
+           retrieval-prompt-msg-id (when retrieval-prompt-msg (:message/id retrieval-prompt-msg))
+
+           retrieved-sources-msg (first (filter #(and (= :system (:message/role %))
+                                                      (= :assistant (:message/voice %))
+                                                      (= false (:message/completion %))
+                                                      (= :kind/html (:message/kind %)))
+                                                messages))
+           retrieved-sources-msg-id (when retrieved-sources-msg (:message/id retrieved-sources-msg))
+
+           ;; we send all completion-messages to the llm
+           completion-messages (filter #(not= false (:message/completion %))
+                                       messages)
+           _ (prn "fetched" (count completion-messages) "completion-messages")
+
+           ;; TODO: for each convo turn,
+           ;;   - update the message/text for retrieval-prompt and retrieved-sources messages 
+           ;; NB: should find a way to preserve each version of these two messages, instead of overwriting
+
 
            _ (println "starting query relaxation...")
            _ (reset! !response-states ["Ser etter dokumenter"])
-           extract-search-queries (query-relaxation (:translated_user_query params)
-                                                    (:promptRagQueryRelax params))
+
+           extract-search-queries (query-relaxation (:promptRagQueryRelax params) completion-messages)
            _ (println "done query relaxation.")
 
            _ (println "starting to lookup search phrases...")
@@ -658,7 +696,7 @@
                                (:docsCollectionName params)
                                extract-search-queries
                                (:phrase-gen-prompt params)
-                               (:filter-by params))
+                               filter-by)
            _ (println "done lookup search phrases, found count:" (count search-phrase-hits))
            _ (when (empty? search-phrase-hits)
                (reset! !response-states ["Ingen søkefraser funnet"])
@@ -712,7 +750,7 @@
                (println "***** Error: No documents were loaded during reranking. *****"))
 
            _ (println "starting to transact retrieval prompt...")
-           _ (db/transact-retrieval-prompt !dh-conn convo-id full-prompt)
+           _ (db/transact-retrieval-prompt !dh-conn convo-id retrieval-prompt-msg-id full-prompt)
            _ (println "done transacting retrieval prompt.")
 
            _ (println "starting to generate response...")
@@ -726,7 +764,7 @@
            _ (println "done transacting assistant msg.")
 
            _ (println "starting to transact retrieved sources...")
-           _ (db/transact-retrieved-sources !dh-conn convo-id formatted-message)
+           _ (db/transact-retrieved-sources !dh-conn convo-id retrieved-sources-msg-id formatted-message)
            _ (println "done transacting retrieved sources.")
 
            _ (println "simplifying conversation topic...")
