@@ -32,7 +32,7 @@
  :paths   ["src" "resources"]
  :aliases {:dev
            {:extra-paths ["src-dev"]
-            :extra-deps  {djblue/portal {:mvn/version "0.57.1"}
+            :extra-deps  {djblue/portal {:mvn/version "0.58.5"}
                           thheller/shadow-cljs          {:mvn/version "2.26.2"}
                           io.github.clojure/tools.build {:mvn/version "0.9.6"
                                                          :exclusions  [com.google.guava/guava  ; Guava version conflict between tools.build and clojurescript.
