@@ -2,6 +2,7 @@
   (:require [nano-id.core :refer [nano-id]]
             [chat-app.kit :as kit]
             [clojure.edn :as edn]
+            [hyperfiddle.electric :as e]
             #?(:clj [datahike.api :as d])
             #?(:clj [datahike-jdbc.core])
             #?(:clj [aero.core :as aero])))
@@ -119,9 +120,6 @@
     :db/unique :db.unique/identity
     :db/cardinality :db.cardinality/one}])
 
-;; (defonce create-db (when-not (d/database-exists? cfg) (d/create-database cfg)))
-;; (defonce conn (d/connect cfg))
-;; (defonce dh-schema-tx (d/transact conn {:tx-data dh-schema}))
 
 #?(:clj
    (defn init-db []
@@ -138,6 +136,10 @@
    (def delayed-connection (delay (init-db))))
 
 #?(:clj (defonce conn @delayed-connection))
+
+(e/def db) ; injected database ref; Electric defs are always dynamic
+(e/def auth-conn)
+
 
 
 ;; Queries 
@@ -196,7 +198,7 @@
           db convo-id)))
 
 #?(:clj
-   (defn fetch-user-id [db user-email]
+   (defn fetch-user-id [user-email]
      (:user/id (d/pull conn '[:user/id] [:user/email user-email]))))
 
 #?(:clj
