@@ -10,11 +10,13 @@ Tech stack:
 - Typesense v28
 - Datahike + Postgres
 - OpenAI or Azure OpenAI compatible inference API
+- ColBERT reranker
 
+## Local development
 
-## Run the application
-
+### Install dependencies
 `yarn` to install Tailwind and other javascript dependencies
+
 
 `yarn build:tailwind:dev` to build the css watch and build
 
@@ -25,33 +27,20 @@ Dev build:
 * http://localhost:8080
 * Hot code reloading works: edit -> save -> see app reload in browser
 
-Prod build:
+Production build:
 
 ```shell
 clj -X:build:prod build-client
 clj -M:prod -m prod
 ```
 
+## Docker
+
+see `Dockerfile` 
+
 
 ### Runtime env variables:
 
-ADMIN_USER_EMAILS (space separated)
-ALLOWED_DOMAINS (space separated, example: "@mydomain.com @yourdomain.com")
-ENTITY_CONFIG_FILE
-ADH_POSTGRES_PWD
-ADH_POSTGRES_USER
-ADH_POSTGRES_TABLE # remember, lowercase and underscores only
+For local development, you can specify values for Postgres, Typesense, Azure OpenAI and ColBERT reranker secrets in the `mise.development.local.toml` file (gitignored).
 
-TYPESENSE_API_HOST
-TYPESENSE_API_KEY
-
-COLBERT_API_URL
-
-USE_AZURE_OPENAI
-AZURE_OPENAI_ENDPOINT
-AZURE_OPENAI_DEPLOYMENT_NAME
-AZURE_OPENAI_API_KEY
-
-OPENAI_API_URL
-OPENAI_API_MODEL_NAME
-OPENAI_API_API_KEY
+In production, specify the secrets in the environment variables of the server.
