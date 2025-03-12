@@ -338,13 +338,3 @@ information."
     (log/info "👉" (str "http://" host ":" (-> server (.getConnectors) first (.getPort))))
     server))
 
-
-(comment
-  (require '[datahike.core :as d])
-
-  (d/pull auth/conn)
-
-  (user-key "test@digdir.no")
-  
-  ;;
-  )

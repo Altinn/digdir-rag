@@ -11,16 +11,12 @@
             [chat-app.ui :as ui]
             [chat-app.chat :as chat]
             [chat-app.conversations :as conversations]
-            [chat-app.filters :as filters]
-            [chat-app.entities :as entities]
+            [chat-app.config-ui :as config-ui]
             [chat-app.auth-ui :as auth-ui]
 
             [hyperfiddle.electric :as e]
             [hyperfiddle.electric-dom2 :as dom]
-            [hyperfiddle.electric-ui4 :as ui4]
             [hyperfiddle.rcf :refer [tests tap %]]
-
-            #?(:clj [aero.core :as aero])
 
             ;; rag tests
             #?(:clj [chat-app.rag-test])))
@@ -54,7 +50,7 @@
                        :home (ui/Home.)
                        :conversation (chat/Conversation.)
                        :dashboard (auth-ui/AuthAdminDashboard.)
-                       :edit-prompt (entities/PromptEditor.))
+                       :edit-prompt (config-ui/PromptEditor.))
                      (when (e/watch debug/!debug?)
                        (debug/DBInspector. debug-props))))))
 
