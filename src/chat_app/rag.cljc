@@ -372,7 +372,7 @@
                                      :rank (get-in phrase [:hybrid_search_info :rank_fusion_score])
                                      :index (:index phrase)})
                                   indexed-search-phrase-hits)]
-           (when (= 1 1)
+           #_(when (= 1 1)
              (prn "lookupSearchPhraseSimilar results:")
              (prn response))
            chunk-id-list)))))
