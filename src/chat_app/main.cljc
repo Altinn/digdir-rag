@@ -1,6 +1,10 @@
 (ns chat-app.main
   (:require [chat-app.debug :as debug]
+            #?(:clj [services.system :as system])
             #?(:clj [models.db])
+            #?(:clj [chat-app.rag :as rag])
+            #?(:clj [chat-app.auth :as auth])
+            [chat-app.webauthn :as webauthn]
             [chat-app.ui :as ui]
             [chat-app.chat :as chat]
             [chat-app.conversations :as conversations]
