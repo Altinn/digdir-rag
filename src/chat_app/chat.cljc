@@ -205,7 +205,7 @@
               (ui/observe-resize dom/node scroll-to-bottom)
 
               (dom/div
-               (dom/props {:class "flex flex-col stretch justify-center items-center h-full lg:max-w-3xl mx-auto gap-4"})
+               (dom/props {:class "flex flex-col stretch justify-center items-center h-full lg:max-w-3xl mx-auto gap-4 pb-[110px]"})
 
                (dom/div (dom/props {:class "flex flex-col gap-8 items-center"})
 

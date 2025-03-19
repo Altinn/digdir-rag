@@ -42,7 +42,7 @@
 (e/defn MainView [debug-props]
   (e/client
    (dom/div (dom/props {:class "flex flex-1 h-full w-full"})
-            (dom/div (dom/props {:class "relative flex-1 overflow-hidden pb-[160px]"})
+            (dom/div (dom/props {:class "relative flex-1 overflow-hidden pb-[110px]"})
                      (case (e/watch ui/!view-main)
                        :home (ui/Home.)
                        :conversation (chat/Conversation.)

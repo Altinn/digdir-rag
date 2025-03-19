@@ -112,7 +112,7 @@
 ;; Confirmation code
 
 (def postmark-url "https://api.postmarkapp.com/email")
-(def email-server-token (read-string (or (System/getenv "POSTMARK_API_KEY") "")))
+(def email-server-token (or (System/getenv "POSTMARK_API_KEY") ""))
 
 
 (defn send-confirmation-code [from to code]
