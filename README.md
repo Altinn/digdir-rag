@@ -14,8 +14,30 @@ Tech stack:
 
 ## Local development
 
-### Install dependencies
-`yarn` to install Tailwind and other javascript dependencies
+## Global dependencies
+
+
+### Java and Clojure 
+
+MacOS, using Homebrew
+
+`brew install openjdk@21`
+
+NB: be sure to add the necessary symlink as instructed at the end of the previous command
+
+Clojure command line tools:
+
+`brew install clojure/tools/clojure`
+
+
+### Yarn 4.x.x
+`corepack enable`
+`yarn set version stable`
+
+
+### Install project dependencies
+
+`yarn install` to install Tailwind and other javascript dependencies
 
 
 `yarn build:tailwind:dev` to build the css watch and build
