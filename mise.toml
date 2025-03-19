@@ -39,6 +39,9 @@ MAX_SOURCE_LENGTH=40000
 # ColBERT reranker
 COLBERT_API_URL=""
 
+# Postmark email service
+POSTMARK_API_KEY=""
+
 # Auth secrets
 ADMIN_USER_EMAILS=""
 ALLOWED_DOMAINS=""

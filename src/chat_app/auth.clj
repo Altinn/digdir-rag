@@ -114,7 +114,7 @@
 ;; Confirmation code
 
 (def postmark-url "https://api.postmarkapp.com/email")
-(def email-server-token (:postmark (read-string (slurp "secrets.edn"))))
+(def email-server-token (read-string (System/getenv "POSTMARK_API_KEY")))
 
 
 (defn send-confirmation-code [from to code]
