@@ -1,17 +1,30 @@
 <!DOCTYPE html>
 <html>
-    <head>
-        <!-- {:hyperfiddle/user-version $:hyperfiddle/user-version$} -->
-        <meta charset="utf-8"/>
-        <title>digdir.cloud</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <link rel="stylesheet" href="/styles.css">
 
-        <!-- Favicon -->
-        <link rel="icon" type="image/svg+xml" href="digdir_icon.svg">
-    </head>
-    <body>
-        <!-- $key$ is a template string. See chat-app.server-jetty/wrap-index-page -->
-        <script type="text/javascript" src="$:hyperfiddle.client.module/main$"></script>
-    </body>
+<head>
+    <!-- {:hyperfiddle/user-version $:hyperfiddle/user-version$} -->
+    <meta charset="utf-8" />
+    <title>digdir.cloud</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="https://altinncdn.no/fonts/inter/v4.1/inter.css"
+        integrity="sha384-OcHzc/By/OPw9uJREawUCjP2inbOGKtKb4A/I2iXxmknUfog2H8Adx71tWVZRscD" crossorigin="anonymous">
+    <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="/designsystemet.css">
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="digdir_icon.svg">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            font-feature-settings: 'cv05' 1;
+            /* Enable lowercase l with tail */
+        }
+    </style>
+</head>
+
+<body>
+    <!-- $key$ is a template string. See chat-app.server-jetty/wrap-index-page -->
+    <script type="text/javascript" src="$:hyperfiddle.client.module/main$"></script>
+</body>
+
 </html>
