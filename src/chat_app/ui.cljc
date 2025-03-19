@@ -10,9 +10,9 @@
 #?(:cljs (defonce !view-main (atom :home)))
 #?(:cljs (defonce !view-main-prev (atom nil)))
 #?(:cljs (defonce view-main-watcher (add-watch !view-main :main-prev (fn [_k _r os _ns]
-                                                                      (println "this is os: " os)
-                                                                      (when-not (= os :settings))
-                                                                      (reset! !view-main-prev os)))))
+                                                                       (println "this is os: " os)
+                                                                       (when-not (= os :settings))
+                                                                       (reset! !view-main-prev os)))))
 
 ;; UI Utility Functions
 #?(:cljs (defn observe-resize [node callback]
@@ -29,28 +29,6 @@
                                         (callback width height y)))))]
              (.observe resize-observer observed-element)
              (fn [] (.disconnect resize-observer)))))
-
-;; Layout Components
-(e/defn Topbar [conversation-entity]
-  (e/client
-   (let [sidebar? (e/watch !sidebar?)]
-     (dom/div (dom/props {:class "sticky w-full top-0 h-14 z-10"})
-              (dom/div (dom/props {:class (str "flex justify-between gap-4 px-4 py-4"
-                                               (if sidebar?
-                                                 " w-[260px] bg-slate-100"
-                                                 " w-max"))})
-                       (ui/button
-                        (e/fn [] (reset! !sidebar? (not @!sidebar?)))
-                        (dom/img (dom/props {:class "w-6 h-6"
-                                             :src (if-not sidebar?
-                                                    "icons/panel-left-open.svg"
-                                                    "icons/panel-left-close.svg")})))
-                       #_(ui/button (e/fn [] (reset! !view-main :entity-selection))
-                                    (dom/img (dom/props {:class "w-6 h-6"
-                                                         :src "icons/square-pen.svg"}))))
-              #_(dom/div (dom/props {:class "flex gap-4 py-4 items-center text-slate-500"})
-                       (dom/p (dom/text (:name conversation-entity))))))))
-
 
 (e/defn Home []
   (e/client
