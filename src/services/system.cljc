@@ -1,10 +1,5 @@
 (ns services.system
-  (:require  [hyperfiddle.electric :as e]
-             [hyperfiddle.electric-dom2 :as dom]
-             [nano-id.core :refer [nano-id]]
-             #?(:clj [datahike.api :as d])
-             #?(:clj [models.db :as db :refer [delayed-connection]])
-             #?(:clj [services.openai :as openai])
+  (:require  #?(:clj [models.db :as db :refer [delayed-connection]])
              #?(:clj [chat-app.rag :as rag])))
 
 #?(:clj
