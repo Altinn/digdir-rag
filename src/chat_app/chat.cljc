@@ -128,21 +128,28 @@
                    (dom/div (dom/props {:class "relative flex w-full flex-grow flex-col rounded-md border border-black/10 bg-white shadow-[0_0_10px_rgba(0,0,0,0.10)] sm:mx-4"})
                             (dom/textarea
                              (dom/props {:id "prompt-input"
-                                         :class "sm:h-11 m-0 w-full resize-none border-0 bg-transparent p-0 py-2 pr-8 pl-10 text-black md:py-3 md:pl-10"
+                                         :class "min-h-[44px] max-h-[200px] m-0 w-full resize-none border-0 bg-transparent p-0 py-2 pr-8 pl-10 text-black md:py-3 md:pl-10 overflow-y-auto"
                                          :placeholder (str "Hva kan jeg hjelpe deg med?")
                                          :value ""
+                                         :rows "4"
                                          :disabled wait?})
                              (reset! !input-node dom/node)
                              (.focus dom/node)
                              (dom/on "keydown"
                                      (e/fn [e]
                                        (when (= "Enter" (.-key e))
-                                         (.preventDefault e)
-                                         (when-some [v (not-empty (.. e -target -value))]
-                                           (when-not (str/blank? v)
-                                             (HandleChatMsg. v
-                                                             (-> (last messages) :message.filter/value boolean))))
-                                         (set! (.-value @!input-node) "")))))
+                                         ;; Only submit message if shift key is not pressed
+                                         (if (.-shiftKey e)
+                                           ;; Allow shift+enter to create a new line
+                                           nil
+                                           ;; Regular enter submits the message
+                                           (do
+                                             (.preventDefault e)
+                                             (when-some [v (not-empty (.. e -target -value))]
+                                               (when-not (str/blank? v)
+                                                 (HandleChatMsg. v
+                                                                 (-> (last messages) :message.filter/value boolean))))
+                                             (set! (.-value @!input-node) "")))))))
                             (let [wait? (e/server (e/watch !wait?))]
                               (ui4/button
                                (e/fn []
