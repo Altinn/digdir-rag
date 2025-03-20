@@ -6,7 +6,7 @@
            io.replikativ/datahike-jdbc {:mvn/version "0.3.49"}
            org.postgresql/postgresql {:mvn/version "42.7.5"}
            net.clojars.wkok/openai-clojure {:mvn/version "0.18.1"}
-           nano-id/nano-id {:mvn/version "1.0.0"}
+           nano-id/nano-id {:mvn/version "1.1.0"}
            aero/aero {:mvn/version "1.1.6"}
            io.github.nextjournal/markdown {:mvn/version "0.6.157"}
            hiccup/hiccup {:mvn/version "2.0.0-RC4"}
