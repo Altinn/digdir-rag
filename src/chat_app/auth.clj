@@ -63,13 +63,11 @@
 
 (defn admin-user? [email]
   (let [admins-env (or (System/getenv "ADMIN_USER_EMAILS") "")
-        admins (set (map str/trim (str/split admins-env #" ")))]
-    (println "ADMIN_USER_EMAILS: " admins)
+        admins (set (map str/trim (str/split admins-env #" ")))] 
     (contains? admins email)))
 
 (defn domain-whitelist [email]
   (let [domains (set (map str/trim (str/split (or (System/getenv "ALLOWED_DOMAINS") "") #" ")))]
-    (println "ALLOWED_DOMAINS: " domains)
     (contains? domains email)))
 
 (defn approved-domain? [email]
@@ -114,7 +112,7 @@
 ;; Confirmation code
 
 (def postmark-url "https://api.postmarkapp.com/email")
-(def email-server-token (:postmark (read-string (slurp "secrets.edn"))))
+(def email-server-token (or (System/getenv "POSTMARK_API_KEY") ""))
 
 
 (defn send-confirmation-code [from to code]

@@ -1,8 +1,5 @@
 (ns chat-app.main
   (:require [chat-app.debug :as debug]
-            [chat-app.kit :as kit]
-            [chat-app.rhizome :as rhizome]
-            [services.openai :as openai]
             #?(:clj [services.system :as system])
             #?(:clj [models.db])
             #?(:clj [chat-app.rag :as rag])
@@ -45,7 +42,7 @@
 (e/defn MainView [debug-props]
   (e/client
    (dom/div (dom/props {:class "flex flex-1 h-full w-full"})
-            (dom/div (dom/props {:class "relative flex-1 overflow-hidden pb-[120px]"})
+            (dom/div (dom/props {:class "relative flex-1 overflow-hidden pb-[110px]"})
                      (case (e/watch ui/!view-main)
                        :home (ui/Home.)
                        :conversation (chat/Conversation.)
