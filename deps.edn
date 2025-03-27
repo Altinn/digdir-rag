@@ -9,7 +9,7 @@
            nano-id/nano-id {:mvn/version "1.0.0"}
            aero/aero {:mvn/version "1.1.6"}
            io.github.nextjournal/markdown {:mvn/version "0.6.157"}
-           hiccup/hiccup {:mvn/version "2.0.0-RC4"}
+           hiccup/hiccup {:mvn/version "2.0.0-RC5"}
            markdown-clj/markdown-clj {:mvn/version "1.12.3"}
            io.github.lambdaisland/deep-diff2  {:git/sha "302ded8f32c31c21bccbfa3848601c98187d7521"}
            clj-http/clj-http {:mvn/version "3.13.0"}
