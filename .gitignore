@@ -26,3 +26,4 @@ node_modules
 **/mise.*.local.toml
 
 config/ka_dev.edn
+resources/public/chat_app/digdir-custom.css

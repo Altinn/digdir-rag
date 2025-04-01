@@ -8,9 +8,8 @@
    [chat-app.conversations :as conversations]
    [chat-app.debug :as debug]
    [chat-app.router :as router]
+   [chat-app.react :refer [react-component-tree]]
    [chat-app.ui :as ui]
-   [designsystemet.button :as button]
-   [designsystemet.icon :as icon]
    [hyperfiddle.electric :as e]
    [hyperfiddle.electric-dom2 :as dom] ;; rag tests
    ))
@@ -52,15 +51,14 @@
          :edit-prompt (reset! ui/!view-main :edit-prompt)
          nil))
 
-     (dom/div (dom/props {:class "flex flex-1 h-full w-full"})
-              (dom/div (dom/props {:class "relative flex-1 overflow-hidden py-8"})
-                       (case (e/watch ui/!view-main)
-                         :home (ui/Home.)
-                         :conversation (chat/Conversation.)
-                         :dashboard (auth-ui/AuthAdminDashboard.)
-                         :edit-prompt (config-ui/PromptEditor.))
-                       (when (e/watch debug/!debug?)
-                         (debug/DBInspector. debug-props)))))))
+     (dom/div (dom/props {:class "h-full w-full overflow-hidden p-8"})
+              (case (e/watch ui/!view-main)
+                :home (ui/Home.)
+                :conversation (chat/Conversation.)
+                :dashboard (auth-ui/AuthAdminDashboard.)
+                :edit-prompt (config-ui/PromptEditor.))
+              (when (e/watch debug/!debug?)
+                (debug/DBInspector. debug-props))))))
 
 
 (e/defn Main [ring-request]
@@ -75,10 +73,17 @@
         (dom/main (dom/props {:class "flex h-full w-screen flex-col absolute top-0"})
                   (dom/div (dom/props {:class "flex h-full w-full pt-[48px] sm:pt-0 items-start bg-[#F3F4F4]"})
                            (dom/div
-                            (dom/props {:class (str "flex flex-col" (if (e/watch ui/!sidebar?) " hidden" " block"))})
-                            (button/Button. {:class "ml-8 mt-8" :variant "secondary" :color "neutral" :on-click (e/fn [] (reset! ui/!sidebar? true)) :children
-                                             (e/fn [] (e/client
-                                                       (icon/Icon. {:src "public/chat_app/icons/sidebar_left.svg" :size 24})))}))
+                            (dom/props {:class (str "flex flex-col w-[324px]" (if (e/watch ui/!sidebar?) " hidden" " block"))})
+                            (react-component-tree.
+                             {:component "Button"
+                              :class "ml-8 mt-8"
+                              :props {:variant "secondary"
+                                      :data-color "neutral"
+                                      :onClick (fn [] (reset! ui/!sidebar? true))}
+                              :children [{:component "Icon"
+                                          :props {:src "/icons/sidebar_left.svg"
+                                                  :size 24}}
+                                         "Vis tråder"]}))
                            (conversations/LeftSidebar.)
                            (MainView. {:!active-conversation chat/!active-conversation
                                        :!conversation-entity chat/!conversation-entity})

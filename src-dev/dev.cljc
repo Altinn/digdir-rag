@@ -1,6 +1,7 @@
 (ns dev
   (:require
    chat-app.main
+   #?(:cljs [designsystemet.wrapper])
    [hyperfiddle.electric :as e]
    #?(:clj [chat-app.server-jetty :as jetty])
    #?(:clj [shadow.cljs.devtools.api :as shadow])
@@ -26,12 +27,11 @@
        (comment (shadow-server/stop!))
 
        (def server (jetty/start-server!
-                     (fn [ring-request]
-                       (e/boot-server {} chat-app.main/Main ring-request))
-                     config))
+                    (fn [ring-request]
+                      (e/boot-server {} chat-app.main/Main ring-request))
+                    config))
 
-       (comment (.stop server))
-       )))
+       (comment (.stop server)))))
 
 #?(:cljs ;; Client Entrypoint
    (do
@@ -41,8 +41,8 @@
 
      (defn ^:dev/after-load ^:export start! []
        (set! reactor (electric-entrypoint
-                       #(js/console.log "Reactor success:" %)
-                       #(js/console.error "Reactor failure:" %))))
+                      #(js/console.log "Reactor success:" %)
+                      #(js/console.error "Reactor failure:" %))))
 
      (defn ^:dev/before-load stop! []
        (when reactor (reactor)) ; stop the reactor

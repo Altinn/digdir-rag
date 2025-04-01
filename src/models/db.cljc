@@ -344,7 +344,7 @@
            tx-data
            {:conversation/id convo-id
             :conversation/entity-id entity-id
-            :conversation/topic "Ny samtale"
+            :conversation/topic "Ny tråd"
             :conversation/created time-point
             :conversation/system-prompt "sys-prompt"
             :conversation/messages [{:message/id (nano-id)
