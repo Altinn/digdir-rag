@@ -26,3 +26,5 @@ node_modules
 **/mise.*.local.toml
 
 config/ka_dev.edn
+pdf_inbox/*
+typesense_chunks/*

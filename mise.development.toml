@@ -1,1 +1,5 @@
 [tools]
+node = "22"
+
+[tasks.dev]
+run = 'clj -A:dev -X dev/-main'
