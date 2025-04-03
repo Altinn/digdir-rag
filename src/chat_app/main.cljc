@@ -51,7 +51,7 @@
          :edit-prompt (reset! ui/!view-main :edit-prompt)
          nil))
 
-     (dom/div (dom/props {:class "h-full w-full overflow-hidden p-8"})
+     (dom/div (dom/props {:class "h-full w-full overflow-hidden p-8 flex flex-col"})
               (case (e/watch ui/!view-main)
                 :home (ui/Home.)
                 :conversation (chat/Conversation.)

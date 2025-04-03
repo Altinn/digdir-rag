@@ -124,7 +124,7 @@
          wait? (e/server (e/watch !wait?))]
      (dom/div
       (dom/props {:class "flex"})
-      (react-component-tree. {:component "Textfield" :class "min-w-[720px] input:min-h-[130px]" :props {:id "prompt-input" :placeholder "Hva kan jeg hjelpe deg med?"}}))
+      (react-component-tree. {:component "Textarea" :style {:resize "none"}  :class "min-w-[720px] input:min-h-[130px] rounded-2xl" :props {:id "prompt-input" :placeholder "Hva kan jeg hjelpe deg med?"}}))
     ;;  (dom/div (dom/props {:class (str (if (rhizome/mobile-device?) "bottom-8" "bottom-0") " absolute left-0 w-full border-transparent bg-gradient-to-b from-transparent via-white to-white pt-6 md:pt-2")})
     ;;           (dom/div (dom/props {:class "stretch mx-2 mt-4 flex flex-row gap-3 last:mb-2 md:mx-4 md:mt-[52px] md:last:mb-6 lg:mx-auto lg:max-w-3xl"})
     ;;                    (dom/div (dom/props {:class "flex flex-col w-full gap-2"})
@@ -176,46 +176,58 @@
                                  (when @!is-at-bottom
                                    (println "Scrolling to bottom")
                                    (set! (.-scrollTop container) (.-scrollHeight container)))))]
-        (dom/div
-         (dom/props {:class "max-h-full overflow-x-hidden"})
-         (reset! !chat-container dom/node)
-         (dom/on "scroll" (e/fn [e]
-                            (let [target (.-target e)
-                                  scroll-bottom (+ (.-scrollTop target) (.-clientHeight target))
-                                  scroll-height (.-scrollHeight target)
-                                  at-bottom (<= (- scroll-height scroll-bottom) 1.0)]
-                              (when at-bottom
-                                (println "Scrolling, at bottom?" at-bottom "scroll values - bottom:" scroll-bottom
-                                         "height:" scroll-height "diff:" (- scroll-height scroll-bottom)))
-                              (reset! !is-at-bottom at-bottom))))
+        (reset! !chat-container dom/node)
+        (dom/on "scroll" (e/fn [e]
+                           (let [target (.-target e)
+                                 scroll-bottom (+ (.-scrollTop target) (.-clientHeight target))
+                                 scroll-height (.-scrollHeight target)
+                                 at-bottom (<= (- scroll-height scroll-bottom) 1.0)]
+                             (when at-bottom
+                               (println "Scrolling, at bottom?" at-bottom "scroll values - bottom:" scroll-bottom
+                                        "height:" scroll-height "diff:" (- scroll-height scroll-bottom)))
+                             (reset! !is-at-bottom at-bottom))))
 
-         (when
-          (and (some? convo-id)
-               (some? conversation-entity))
-           (let [messages (e/server (e/offload #(rag/prepare-conversation db convo-id conversation-entity)))]
+        (when
+         (and (some? convo-id)
+              (some? conversation-entity))
+          (let [messages (e/server (e/offload #(rag/prepare-conversation db convo-id conversation-entity)))]
 
-             (ui/observe-resize dom/node scroll-to-bottom)
+            (ui/observe-resize dom/node scroll-to-bottom)
 
 
-             (dom/div (dom/props {:class "flex flex-col gap-8 w-fit mx-auto"})
+            (dom/div (dom/props {:class "flex flex-col gap-8 max-w-[859px] mx-auto"})
 
-                      #_(dom/img (dom/props {:class "w-48 mx-auto rounded-full"
-                                             :src image}))
-                      (dom/div (dom/h1 (dom/props {:class "text-2xl text-start"}) (dom/text name)))
-                      (when messages ;todo: check if this is still needed
-                        (e/for [msg (butlast messages)]
-                          (RenderMsg. msg false))
-                        (RenderMsg. (last messages) true)
-                        (when-let [rs (first response-states)] (ResponseState. rs))))
+                     #_(dom/img (dom/props {:class "w-48 mx-auto rounded-full"
+                                            :src image}))
+                     (dom/div (dom/h1 (dom/props {:class "text-2xl text-start"}) (dom/text name)))
+                     (when messages ;todo: check if this is still needed
+                       (e/for [msg (butlast messages)]
+                         (RenderMsg. msg false))
+                       (RenderMsg. (last messages) true)
+                       (when-let [rs (first response-states)] (ResponseState. rs)))
 
-             (let [stream-msgs (e/server (e/watch !stream-msgs))]
-               (when (:streaming (get stream-msgs convo-id))
-                 (when-let [content (:content (get stream-msgs convo-id))]
-                   (BotMsg. content))))
+                     (if (<= (count messages) 2)
+                       (dom/div
+                        (dom/props {:class "flex flex-col max-w-[720px] mx-auto"})
+                        (dom/p (dom/props {:class "text-lg"}) (dom/text "Forslag"))
+                        (dom/div (dom/props {:class "grid grid-cols-2 gap-6 mt-2"})
+                                 (react-component-tree.
+                                  {:component "Card" :class "h-full" :children [{:component "Paragraph" :children ["Hva rapporterer Digdir om prioriteringene i tildelingsbrevene fra 2022 og 2023 sammenlignet med årsrapportene?"]}]})
+                                 (react-component-tree.
+                                  {:component "Card" :class "h-full" :children [{:component "Paragraph" :children ["Hvilke utfordringer rapporterer Udir om i evaluering om lærerspesialtordningen?"]}]})
+                                 (react-component-tree.
+                                  {:component "Card" :class "h-full" :children [{:component "Paragraph" :children ["Hvilke oppdrag gitt i tildelingsbrevet til Digdir 2022 nevnes i årsrapporten året etter?"]}]})
+                                 (react-component-tree.
+                                  {:component "Card" :class "h-full" :children [{:component "Paragraph" :children ["Hva rapporteres om regnskap, kostnader og bevilgning i DSS sine årsrapport for 2022 og 2023?"]}]})))))
 
-             (dom/div
-              (dom/props {:class "flex flex-col mx-auto w-fit"})
-              (PromptInput. {:convo-id convo-id
-                             :messages messages})
-              (dom/div  (dom/props {:class "flex"}) (dom/p (dom/text "Kunnskapsassistenten kan gjøre feil. Husk å sjekke viktig informasjon."))))))))))))
+            (let [stream-msgs (e/server (e/watch !stream-msgs))]
+              (when (:streaming (get stream-msgs convo-id))
+                (when-let [content (:content (get stream-msgs convo-id))]
+                  (BotMsg. content))))
+
+            (dom/div
+             (dom/props {:class "flex flex-col mx-auto w-fit mt-auto mb-4 gap-6"})
+             (PromptInput. {:convo-id convo-id
+                            :messages messages})
+             (dom/div  (dom/props {:class "flex justify-center"}) (react-component-tree. {:component "Paragraph" :class "text-gray-500" :props {:data-size "xs"} :children ["Kunnskapsassistenten kan gjøre feil. Husk å sjekke viktig informasjon."]}))))))))))
 
