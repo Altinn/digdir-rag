@@ -125,6 +125,19 @@
       result
       (println :error (str result)))))
 
+(defn chunks-exist-for-doc?
+  "Check if chunks already exist for a document in the chunks collection"
+  [chunks-collection doc-num]
+  (let [result (multi-search
+                {:collection chunks-collection
+                 :q doc-num
+                 :query-by "doc_num"
+                 :include-fields "doc_num"
+                 :page 1
+                 :per_page 1})]
+    (and (:success result)
+         (pos? (count (:hits result))))))
+
 ;; (def chunks-to-import-filename "./typesense_chunks/chunks_to_import.jsonl")
 (def docs-collection (System/getenv "DOCS_COLLECTION"))
 (def chunks-collection (System/getenv "CHUNKS_COLLECTION"))
@@ -256,11 +269,22 @@
 (defn run-state-machine
   "Runs the state machine with the given initial context"
   [initial-ctx]
-  (let [file-status (get-file-metadata (:files-collection-name initial-ctx) (:doc-num initial-ctx))]
-    (if (= (:chunkr_status file-status) "completed")
+  (let [file-status (get-file-metadata (:files-collection-name initial-ctx) (:doc-num initial-ctx))
+        doc-num (:doc-num initial-ctx)]
+    (cond
+      ;; Check if file status is already marked as completed
+      (= (:chunkr_status file-status) "completed")
       (do
-        (log/info "Skipping already completed doc_num:" (:doc-num initial-ctx))
+        (log/info "Skipping already completed doc_num:" doc-num)
         (assoc initial-ctx :current-state :completed))
+      
+      ;; Check if chunks exist even though status isn't completed
+      (chunks-exist-for-doc? chunks-collection doc-num)
+      (do
+        (log/info "Found existing chunks for doc_num:" doc-num "- updating status to completed")
+        (upsert-file-chunkr-status (:files-collection-name initial-ctx) (:file_id file-status) "completed")
+        (assoc initial-ctx :current-state :completed))
+      :else
       (loop [ctx (assoc initial-ctx :current-state :init)
              attempt 1]
         (let [current-state (:current-state ctx)
@@ -323,7 +347,7 @@
                              :query-by "doc_num"
                              :include-fields "doc_num"
                              :page-size 200
-                             :page 3
+                             :page 1
                              :q "*"})
               :hits
               (mapv :doc_num))
@@ -334,20 +358,21 @@
 
 
   ;; import documents from KUDOS, converting them to Markdown with Chunkr.ai
-  (doseq [doc-num (->>
-                   (multi-search {:collection "kudos_docs_2025-03-24"
-                                  :query-by "title"
-                                  :include-fields "doc_num"
-                                  :page-size 200
-                                  :page 1
-                                  :q "Stimulab"})
-                   :hits
-                   (mapv :doc_num))
-]
-    (let [_ (println "Processing document:" doc-num)]
-      (process-pdf-with-chunkr files-collection-name doc-num)))
+  (doseq [i (range 1 14)]
+    (doseq [doc-num (->>
+                     (multi-search {:collection "kudos_docs_2025-03-24"
+                                    :query-by "title"
+                                    :include-fields "doc_num"
+                                    :page-size 200
+                                    :page 1
+                                    :q "Stimulab"})
+                     :hits
+                     (mapv :doc_num))
+            ]
+      (let [_ (println "Processing document:" doc-num)]
+        (process-pdf-with-chunkr files-collection-name doc-num))))
   
-  (doseq [i (range 4 14)]
+  (doseq [i (range 1 14)]
     (doseq [doc-num (->>
                      (multi-search {:collection "kudos_docs_2025-03-24"
                                     :query-by "doc_num"
@@ -361,7 +386,7 @@
         (process-pdf-with-chunkr files-collection-name doc-num))))
 
 
-  
+  (System/getenv "TYPESENSE_API_HOST")
 
   ;;
   )
