@@ -12,7 +12,7 @@
            hiccup/hiccup {:mvn/version "2.0.0-RC4"}
            markdown-clj/markdown-clj {:mvn/version "1.12.3"}
            io.github.lambdaisland/deep-diff2  {:git/sha "302ded8f32c31c21bccbfa3848601c98187d7521"}
-           clj-http/clj-http {:mvn/version "3.13.0"}
+           clj-http/clj-http {:mvn/version "3.12.3"}
            io.github.runeanielsen/typesense-clj {:mvn/version "0.1.146"}
            dev.weavejester/medley {:mvn/version "1.8.1"}
            cheshire/cheshire {:mvn/version "5.13.0"}
@@ -25,8 +25,24 @@
            com.hyperfiddle/electric       {:git/url "https://github.com/hyperfiddle/electric" :git/sha "f620a2f89f8e706d1c3d42c29837bb2889e301ef"}
            com.hyperfiddle/rcf            {:mvn/version "20220926-202227"}
            ring/ring                      {:mvn/version "1.11.0"} ; comes with Jetty
+           ;; Jakarta Servlet and Jetty 11.x dependencies for AsyncContext support
+           jakarta.servlet/jakarta.servlet-api {:mvn/version "5.0.0"}
+           org.eclipse.jetty/jetty-server {:mvn/version "11.0.15"}
+           org.eclipse.jetty/jetty-servlet {:mvn/version "11.0.15"}
+           org.eclipse.jetty/jetty-util {:mvn/version "11.0.15"}
+           org.eclipse.jetty.websocket/websocket-jetty-api {:mvn/version "11.0.15"}
+           org.eclipse.jetty.websocket/websocket-jetty-server {:mvn/version "11.0.15"}
+           org.eclipse.jetty.websocket/websocket-servlet {:mvn/version "11.0.15"}
+           org.eclipse.jetty.websocket/websocket-core-common {:mvn/version "11.0.15"}
+           org.eclipse.jetty.websocket/websocket-core-server {:mvn/version "11.0.15"}
+           org.eclipse.jetty.websocket/websocket-core-client {:mvn/version "11.0.15"}
+           org.eclipse.jetty.websocket/websocket-jetty-common {:mvn/version "11.0.15"}
+           org.eclipse.jetty/jetty-webapp {:mvn/version "11.0.15"}
+           org.eclipse.jetty/jetty-http {:mvn/version "11.0.15"}
+           org.eclipse.jetty/jetty-security {:mvn/version "11.0.15"}
+           org.eclipse.jetty/jetty-io {:mvn/version "11.0.15"}
            org.clojure/clojure            {:mvn/version "1.12.0"} ; later releases break Electric v2
-           org.clojure/clojurescript      {:mvn/version "1.11.132"}
+           org.clojure/clojurescript      {:mvn/version "1.11.121"}
            org.clojure/tools.logging      {:mvn/version "1.2.4"}
            ch.qos.logback/logback-classic {:mvn/version "1.5.17"}}
  :paths   ["src" "resources"]
@@ -46,7 +62,7 @@
            {:extra-paths ["src-build"]
             :ns-default  build
             :extra-deps  {thheller/shadow-cljs          {:mvn/version "2.26.2"}
-                          io.github.clojure/tools.build {:mvn/version "0.10.7"
+                          io.github.clojure/tools.build {:mvn/version "0.9.6"
                                                          :exclusions  [com.google.guava/guava   ; Guava version conflict between tools.build and clojurescript.
                                                                        org.slf4j/slf4j-nop]}}} ; clashes with app logger
            }}
