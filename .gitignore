@@ -22,6 +22,9 @@ node_modules
 **/app.jar
 **/electric-manifest.edn
 
+pdf_inbox/*
+typesense_chunks/*
+
 **/secrets.edn
 **/mise.*.local.toml
 
