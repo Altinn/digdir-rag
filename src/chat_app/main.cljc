@@ -51,7 +51,7 @@
          :edit-prompt (reset! ui/!view-main :edit-prompt)
          nil))
 
-     (dom/div (dom/props {:class "h-full w-full overflow-hidden p-8 flex flex-col"})
+     (dom/div (dom/props {:class "h-full w-full overflow-auto p-8 flex flex-col"})
               (case (e/watch ui/!view-main)
                 :home (ui/Home.)
                 :conversation (chat/Conversation.)
@@ -87,4 +87,17 @@
                            (conversations/LeftSidebar.)
                            (MainView. {:!active-conversation chat/!active-conversation
                                        :!conversation-entity chat/!conversation-entity})
+                           (dom/div
+                            (dom/props {:class "flex flex-col w-[324px]"})
+                            (react-component-tree.
+                             {:component "Button"
+                              :class "ml-8 mt-8"
+                              :props {:variant "secondary"
+                                      :data-color "primary"
+                                      :onClick (fn [] (reset! ui/!sidebar? true))}
+                              :children [{:component "Icon"
+                                          :props {:src "/icons/sidebar_left.svg"
+                                                  :size 24
+                                                  :fill "#0061b8"}}
+                                         "Vis kilder"]}))
                            (debug/DebugController.))))))))

@@ -26,19 +26,19 @@
    (let [conversation-entity (e/watch !conversation-entity)
          {:message/keys [created id text role kind voice]} msg-map
          {:keys [name image]} conversation-entity]
-     (dom/div (dom/props {:class "flex w-full flex-col items-start max-w-[728px] prose whitespace-pre-wrap bg-white p-6 rounded-2xl gap-4"})
+     (dom/div (dom/props {:class "flex max-w-[728px] flex-col items-start prose whitespace-pre-wrap bg-white p-6 rounded-2xl gap-4"})
               ;; (dom/div (dom/props {:class "flex"})
                       ;;  (dom/img (dom/props {:class "rounded-full w-8 h-8"
                       ;;                       :src image}))
               ;; (dom/div (dom/props {:class "prose whitespace-pre-wrap px-4 pt-1 "})
               (case kind
-                :kind/html (set! (.-className dom/node) "hidden") ;; Hide sources for now, may need rewrite how sources are retrieved
+                :kind/html (set! (.-className dom/node) "d-none") ;; Hide sources for now, may need rewrite how sources are retrieved
                 :kind/markdown (set! (.-innerHTML dom/node) (md2/md-to-html-string text))
                 (set! (.-innerHTML dom/node) (md2/md-to-html-string text)))))))
 
 (e/defn UserMsg [msg]
   (e/client
-   (dom/div (dom/props {:class "flex w-full flex-col items-start"})
+   (dom/div (dom/props {:class "flex max-w-[728px] flex-col items-start"})
             (let [msg-hovered? (dom/Hovered?.)]
          ;; disabling edit button for now, should make it configurable                  
               #_(ui4/button (e/fn [])
@@ -53,38 +53,50 @@
                (dom/text (str (clojure.string/upper-case (subs msg 0 1)) (subs msg 1))))))))
 
 (e/defn ResponseState [state]
-  (e/client (dom/div (dom/props {:class "w-full"})
+  (e/client (dom/div (dom/props {:class "w-full flex flex-col gap-6"})
                      (dom/div
-                      (dom/props {:class "mx-auto flex flex-1 gap-4 text-base md:gap-5 lg:gap-6"})
+                      (dom/props {:class "mx-auto w-full flex flex-1 gap-4 text-base md:gap-5 lg:gap-6 bg-[#BABEC4] p-6"})
                       (dom/div (dom/props {:class "flex w-full flex-col items-start"})
                                (let [msg-hovered? (dom/Hovered?.)]
                                  (dom/div (dom/props {:class "flex"})
-                                          (dom/img (dom/props {:class "w-8 h-8"
-                                                               :src "icons/progress-circle.svg"}))
+                                          (react-component-tree. {:component "Spinner" :props {:data-color "neutral"}})
                                           (dom/div (dom/props {:class "prose whitespace-pre-wrap px-4 pt-1 max-w-[600px]"})
-                                                   (dom/text state)))))))))
+                                                   (dom/text state))))))
+                     (dom/div (dom/props {:class "flex flex-col gap-4"})
+                              (react-component-tree. {:component "Skeleton" :style {:width "100%"} :props {:variant "circle"}})
+                              (react-component-tree. {:component "Skeleton" :style {:width "100%"} :props {:variant "circle"}})
+                              (react-component-tree. {:component "Skeleton" :style {:width "100%"} :props {:variant "circle"}})
+                              (react-component-tree. {:component "Skeleton" :style {:width "100%"} :props {:variant "circle"}}))
+                     (dom/div (dom/props {:class "flex flex-col gap-4 mt-4"})
+                              (react-component-tree. {:component "Skeleton" :style {:width "100%"} :props {:variant "rectangle" :height "81px"}}))
+                     (dom/div (dom/props {:class "grid grid-cols-3 gap-4"})
+                              (react-component-tree. {:component "Skeleton" :props {:variant "circle" :width "100%"}})
+                              (react-component-tree. {:component "Skeleton" :props {:variant "circle" :width "100%"}})
+                              (react-component-tree. {:component "Skeleton" :props {:variant "circle" :width "100%"}})))))
 
 (e/defn RenderMsg [msg-map last?]
   (e/client
    (let [{:message/keys [created id text role kind voice]} msg-map
          _ (prn "message id" id "voice:" voice " kind: " kind)]
-     (dom/div
-      (dom/props {:class "w-fit flex flex-1 gap-4 text-base md:gap-5 lg:gap-6"})
-      (case voice
-        :user (UserMsg. text)
-        :assistant  (BotMsg. msg-map)
-        :filter (FilterMsg. msg-map last?)
-        :agent (dom/div (dom/text))
-        :system (dom/div (dom/props {:class "group md:px-4 border-b border-black/10 bg-white text-gray-800"})
-                         (dom/div (dom/props {:class "relative m-auto flex p-4 text-base md:max-w-2xl md:gap-6 md:py-6 lg:max-w-2xl lg:px-0 xl:max-w-3xl"})
-                                  #_(dom/div (dom/props {:class "min-w-[40px] text-right font-bold"})
-                                             (set! (.-innerHTML dom/node) bot-icon))
-                                  (dom/div (dom/props {:class "prose whitespace-pre-wrap flex-1"})
-                                           (set! (.-innerHTML dom/node) (md2/md->html text)))
-                                  #_(dom/div (dom/props {:class "md:-mr-8 ml-1 md:ml-0 flex flex-col md:flex-row gap-4 md:gap-1 items-center md:items-start justify-end md:justify-start"})
-                                             (dom/button (dom/props {:class "invisible group-hover:visible focus:visible text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"})
+     ;; Skip rendering sources completely
+     (when-not (= kind :kind/html)
+       (dom/div
+        (dom/props {:class "w-fit flex flex-1 gap-4 text-base md:gap-5 lg:gap-6"})
+        (case voice
+          :user (UserMsg. text)
+          :assistant  (BotMsg. msg-map)
+          :filter (FilterMsg. msg-map last?)
+          :agent (dom/div (dom/text text))
+          :system (dom/div (dom/props {:class "group md:px-4 border-b border-black/10 bg-white text-gray-800"})
+                           (dom/div (dom/props {:class "relative m-auto flex p-4 text-base md:max-w-2xl md:gap-6 md:py-6 lg:max-w-2xl lg:px-0 xl:max-w-3xl"})
+                                    #_(dom/div (dom/props {:class "min-w-[40px] text-right font-bold"})
+                                               (set! (.-innerHTML dom/node) bot-icon))
+                                    (dom/div (dom/props {:class "prose whitespace-pre-wrap flex-1"})
+                                             (set! (.-innerHTML dom/node) (md2/md->html text)))
+                                    #_(dom/div (dom/props {:class "md:-mr-8 ml-1 md:ml-0 flex flex-col md:flex-row gap-4 md:gap-1 items-center md:items-start justify-end md:justify-start"})
+                                               (dom/button (dom/props {:class "invisible group-hover:visible focus:visible text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"})
 
-                                                         (set! (.-innerHTML dom/node) delete-icon))))))))))
+                                                           (set! (.-innerHTML dom/node) delete-icon)))))))))))
 
 (e/defn HandleChatMsg [user-query last-message-is-filter?]
   (e/client
@@ -123,8 +135,12 @@
    (let [!input-node (atom nil)
          wait? (e/server (e/watch !wait?))]
      (dom/div
-      (dom/props {:class "flex"})
-      (react-component-tree. {:component "Textarea" :style {:resize "none"}  :class "min-w-[720px] input:min-h-[130px] rounded-2xl" :props {:id "prompt-input" :placeholder "Hva kan jeg hjelpe deg med?"}}))
+      (dom/props {:class "flex flex-col gap-8"})
+      (dom/div (dom/props {:class "relative"})
+               (react-component-tree. {:component "Textarea" :style {:resize "none" :height "130px"}  :class "min-w-[720px] rounded-3xl p-6" :props {:id "prompt-input" :placeholder "Hva kan jeg hjelpe deg med?"}})
+               (react-component-tree. {:component "Button" :class "absolute right-2 bottom-2 rounded-full p-0" :children [{:component "Icon" :props {:src "/icons/old/send.svg" :size 24}}]}))
+      (when (<= (count messages) 2)
+        (dom/div  (dom/props {:class "flex justify-center"}) (react-component-tree. {:component "Paragraph" :class "text-gray-500" :props {:data-size "xs"} :children ["Kunnskapsassistenten kan gjøre feil. Husk å sjekke viktig informasjon."]}))))
     ;;  (dom/div (dom/props {:class (str (if (rhizome/mobile-device?) "bottom-8" "bottom-0") " absolute left-0 w-full border-transparent bg-gradient-to-b from-transparent via-white to-white pt-6 md:pt-2")})
     ;;           (dom/div (dom/props {:class "stretch mx-2 mt-4 flex flex-row gap-3 last:mb-2 md:mx-4 md:mt-[52px] md:last:mb-6 lg:mx-auto lg:max-w-3xl"})
     ;;                    (dom/div (dom/props {:class "flex flex-col w-full gap-2"})
@@ -195,39 +211,48 @@
             (ui/observe-resize dom/node scroll-to-bottom)
 
 
-            (dom/div (dom/props {:class "flex flex-col gap-8 max-w-[859px] mx-auto"})
+            (dom/div (dom/props {:class "flex flex-col gap-8 justify-between h-full"})
 
                      #_(dom/img (dom/props {:class "w-48 mx-auto rounded-full"
                                             :src image}))
-                     (dom/div (dom/h1 (dom/props {:class "text-2xl text-start"}) (dom/text name)))
-                     (when messages ;todo: check if this is still needed
-                       (e/for [msg (butlast messages)]
-                         (RenderMsg. msg false))
-                       (RenderMsg. (last messages) true)
-                       (when-let [rs (first response-states)] (ResponseState. rs)))
+                     (dom/div (dom/props {:class "flex flex-col gap-8"})
+                              (dom/h1 (dom/props {:class "text-2xl text-start"}) (dom/text name))
+                              (when-let [filter-msg (first (filter #(= (:message/voice %) :filter) messages))]
+                                (FilterMsg. filter-msg false)))
 
-                     (if (<= (count messages) 2)
-                       (dom/div
-                        (dom/props {:class "flex flex-col max-w-[720px] mx-auto"})
-                        (dom/p (dom/props {:class "text-lg"}) (dom/text "Forslag"))
-                        (dom/div (dom/props {:class "grid grid-cols-2 gap-6 mt-2"})
-                                 (react-component-tree.
-                                  {:component "Card" :class "h-full" :children [{:component "Paragraph" :children ["Hva rapporterer Digdir om prioriteringene i tildelingsbrevene fra 2022 og 2023 sammenlignet med årsrapportene?"]}]})
-                                 (react-component-tree.
-                                  {:component "Card" :class "h-full" :children [{:component "Paragraph" :children ["Hvilke utfordringer rapporterer Udir om i evaluering om lærerspesialtordningen?"]}]})
-                                 (react-component-tree.
-                                  {:component "Card" :class "h-full" :children [{:component "Paragraph" :children ["Hvilke oppdrag gitt i tildelingsbrevet til Digdir 2022 nevnes i årsrapporten året etter?"]}]})
-                                 (react-component-tree.
-                                  {:component "Card" :class "h-full" :children [{:component "Paragraph" :children ["Hva rapporteres om regnskap, kostnader og bevilgning i DSS sine årsrapport for 2022 og 2023?"]}]})))))
+                     (dom/div (dom/props {:class "flex flex-col gap-8"})
+                              (when messages ;todo: check if this is still needed
+                                (e/for [msg (butlast messages)]
+                                  (when-not (or (= (:message/voice msg) :agent)
+                                                (= (:message/voice msg) :filter))
+                                    (RenderMsg. msg false)))
+                                (let [last-msg (last messages)]
+                                  (when-not (or (= (:message/voice last-msg) :agent)
+                                                (= (:message/voice last-msg) :filter))
+                                    (RenderMsg. last-msg true)))
+                                (when-let [rs (first response-states)] (ResponseState. rs))
+                                (when (> (count messages) 2)
+                                  (dom/div  (dom/props {:class "flex justify-center"}) (react-component-tree. {:component "Paragraph" :class "text-gray-500" :props {:data-size "xs"} :children ["Kunnskapsassistenten kan gjøre feil. Husk å sjekke viktig informasjon."]}))))
+                              (if (<= (count messages) 2)
+                                (dom/div
+                                 (dom/props {:class "flex flex-col max-w-[720px] mx-auto"})
+                                 (dom/p (dom/props {:class "text-lg"}) (dom/text "Forslag"))
+                                 (dom/div (dom/props {:class "grid grid-cols-2 gap-6 mt-2"})
+                                          (react-component-tree.
+                                           {:component "Card" :class "h-full" :children [{:component "Paragraph" :children ["Hva rapporterer Digdir om prioriteringene i tildelingsbrevene fra 2022 og 2023 sammenlignet med årsrapportene?"]}]})
+                                          (react-component-tree.
+                                           {:component "Card" :class "h-full" :children [{:component "Paragraph" :children ["Hvilke utfordringer rapporterer Udir om i evaluering om lærerspesialtordningen?"]}]})
+                                          (react-component-tree.
+                                           {:component "Card" :class "h-full" :children [{:component "Paragraph" :children ["Hvilke oppdrag gitt i tildelingsbrevet til Digdir 2022 nevnes i årsrapporten året etter?"]}]})
+                                          (react-component-tree.
+                                           {:component "Card" :class "h-full" :children [{:component "Paragraph" :children ["Hva rapporteres om regnskap, kostnader og bevilgning i DSS sine årsrapport for 2022 og 2023?"]}]})))))
+                     (dom/div
+                      (dom/props {:class "flex flex-col mx-auto w-fit mt-auto mb-4 gap-6"})
+                      (PromptInput. {:convo-id convo-id
+                                     :messages messages}))
 
-            (let [stream-msgs (e/server (e/watch !stream-msgs))]
-              (when (:streaming (get stream-msgs convo-id))
-                (when-let [content (:content (get stream-msgs convo-id))]
-                  (BotMsg. content))))
-
-            (dom/div
-             (dom/props {:class "flex flex-col mx-auto w-fit mt-auto mb-4 gap-6"})
-             (PromptInput. {:convo-id convo-id
-                            :messages messages})
-             (dom/div  (dom/props {:class "flex justify-center"}) (react-component-tree. {:component "Paragraph" :class "text-gray-500" :props {:data-size "xs"} :children ["Kunnskapsassistenten kan gjøre feil. Husk å sjekke viktig informasjon."]}))))))))))
+                     (let [stream-msgs (e/server (e/watch !stream-msgs))]
+                       (when (:streaming (get stream-msgs convo-id))
+                         (when-let [content (:content (get stream-msgs convo-id))]
+                           (BotMsg. content))))))))))))
 
