@@ -1,12 +1,12 @@
 {
   "name": "electric-chat",
-  "packageManager": "yarn@4.6.0",
+  "packageManager": "yarn@4.8.1",
   "scripts": {
     "build:tailwind:dev": "npx tailwindcss -i ./resources/input.css -o ./resources/public/chat_app/styles.css --watch",
     "build:tailwind": "npx tailwindcss -i ./resources/input.css -o ./resources/public/chat_app/styles.css --minify"
   },
   "devDependencies": {
-    "shadow-cljs": "2.28.21",
+    "shadow-cljs": "2.28.23",
     "tailwindcss": "^3.4.17"
   },
   "dependencies": {
